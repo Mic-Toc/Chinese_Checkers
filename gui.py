@@ -4,7 +4,7 @@ import tkinter as tk
 from typing import Callable, Dict, List, Any, Tuple
 
 OUTER_COLOR = "#CDC8B1"
-FRAME_COLOR = "#F6F3E7"
+FRAME_COLOR = "#ede8d5"
 
 IN_BOARD_COLOR = "#CDAA7D"
 BOARD_WIDTH = 480

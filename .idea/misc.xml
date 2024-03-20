@@ -4,5 +4,5 @@
     <option name="pathToExecutable" value="/usr/bin/black" />
     <option name="sdkUUID" value="37c6bb84-6799-4242-9426-9fb77a7a6a0a" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.9 (Chinese_Checkers)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.9" project-jdk-type="Python SDK" />
 </project>
