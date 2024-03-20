@@ -121,7 +121,7 @@ class ChineseCheckersGui:
         # Each tuple represents the points to be used for a triangle.
         indices = [(0, 4, 5), (3, 1, 2)]
 
-        # Drawing the two triangles to form the hexagram.
+        # Drawing two triangles to form the hexagram.
         for i in range(2):
             triangle_points = [points[j] for j in indices[i]]
             self._canvas.create_polygon(*triangle_points, fill="white")
