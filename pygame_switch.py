@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import pygame
 import sys
 import math
@@ -13,6 +15,8 @@ BOARD_HEIGHT = 480
 
 FRAME_HEIGHT = 540
 FRAME_WIDTH = 910
+
+COLORS = ["blue", "green", "red", "purple", "yellow", "white"]
 
 
 class ChineseCheckersGame:
@@ -65,11 +69,13 @@ class ChineseCheckersGame:
         # Call the method to draw the hexagram
         self._draw_hexagram()
 
+
     def _draw_hexagram(self):
 
         cos_30 = math.cos(math.pi / 6)
         sin_30 = math.sin(math.pi / 6)
-        size_ratio = 0.90  # The ratio of the hexagram size to the board sizex
+        size_ratio = 0.90  # The ratio of the hexagram size to the board
+        radius_of_cells = 7.2  # The radius of the cells in the board
 
         # Calculate the center of the board, to ensure that the hexagram is drawn
         # in its center.
@@ -82,9 +88,9 @@ class ChineseCheckersGame:
         center_x = FRAME_WIDTH // 2
 
         # Calculating the size of the hexagram based on the board size.
-        # The hexagram will be board% of the frame size.
+        # The hexagram will be inside the board.
         # The size of the hexagram is the distance from its center to any of its outer points.
-        hexagram_size = (min(BOARD_WIDTH, BOARD_HEIGHT) * size_ratio) // 2
+        hexagram_size = (min(BOARD_WIDTH, BOARD_HEIGHT) * size_ratio) / 2
 
         # Note: We are dividing the size by 2 because without it, it is just the distance
         # between one side of the hexagram to the other, and we want the distance to be
@@ -114,12 +120,64 @@ class ChineseCheckersGame:
         temp_surface = pygame.Surface((FRAME_WIDTH, FRAME_HEIGHT), pygame.SRCALPHA)
 
         # Draw two triangles that form the hexagram on the temporary surface
-        for i in range(2):
+        for i in range(len(indices)):
             triangle_points = [points[j] for j in indices[i]]
             pygame.draw.polygon(temp_surface, hexagram_color, triangle_points)
 
+        # Doing this seperately so the cells will be drawn on top of the hexagram
+        color_index = 0
+        for m in range(len(indices)):
+            triangle_points = [points[k] for k in indices[m]]
+            for point in triangle_points:
+                self._draw_cells(temp_surface, point,
+                                 radius_of_cells, COLORS[color_index])
+                color_index += 1
+
+        # self._draw_center_cells(temp_surface, center_y, center_x, radius_of_cells)
+
         # Blit the temporary surface onto the screen surface
         self._screen.blit(temp_surface, (0, 0))
+
+    @staticmethod
+    def _draw_cells(surface: pygame.Surface,
+                    point: Tuple[float, float],
+                    radius: float,
+                    color: str) -> None:
+
+        X_COORD = 0
+        Y_COORD = 1
+
+        # Calculating an setting the distance between each cell and
+        # setting the number of rows
+        dist = 2 * radius + 20  # 20 is the padding between the cells
+        rows = 4
+
+        for i in range(rows):
+
+            # number of cells in the current row
+            cells_in_row = i + 1
+
+            # Calculate the y coordinate of the current row
+            y = point[Y_COORD] + i * dist
+
+            for j in range(cells_in_row):
+
+                # Calculate the x coordinate of the current cell
+                x = (point[X_COORD] - (cells_in_row - 1) *
+                     dist / 2 + j * dist)
+
+                # Draw the cell
+                pygame.draw.circle(surface, color, (x, y), radius)
+
+    # @staticmethod
+    # def _draw_center_cells(surface: pygame.Surface,
+    #                        center_x: int, center_y: int,
+    #                        radius: float) -> None:
+    #
+    #     num_of_center_cells = 61
+    #     for _ in range(2):
+    #         pygame.draw.circle(surface, "black", (center_y, center_x), radius)
+
 
     def run(self):
 
