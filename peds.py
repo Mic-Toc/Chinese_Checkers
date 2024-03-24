@@ -28,10 +28,6 @@ class Peds:
     def same_color(self, other: 'Peds') -> bool:
         return self._color == other.get_color()
 
-    def draw(self, screen: pygame.Surface) -> None:
-        pygame.draw.circle(screen, self._color,
-                           self._location, self._serial_number)
-        # pygame.display.flip()
 
 
 
