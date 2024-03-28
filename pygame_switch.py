@@ -1,4 +1,4 @@
-from typing import Tuple, List
+from typing import Tuple, List, Dict
 
 import pygame
 import sys
@@ -10,13 +10,22 @@ OUTER_COLOR = "#CDC8B1"
 FRAME_COLOR = "#f0e4bb"
 
 BOARD_COLOR = "burlywood4"
-BOARD_WIDTH = 480
-BOARD_HEIGHT = 480
 
-FRAME_HEIGHT = 540
-FRAME_WIDTH = 910
+FRAME_HEIGHT = 590
+FRAME_WIDTH = 930
 
-COLORS = ["blue", "green", "red", "purple", "yellow", "white"]
+BOARD_HEIGHT = 0.95 * FRAME_HEIGHT
+BOARD_WIDTH = 0.6 * FRAME_WIDTH
+
+COLORS = ["cyan", "green", "grey", "purple", "yellow", "lavenderblush"]
+
+rgb_colors = list(map(lambda x: funcs.convert_to_rgb(x), COLORS))
+
+# Add transparency to the colors (x[:3] is the RGB part of the color,
+# x[3] is the alpha channel).
+# If the color has an alpha channel, it's set to 0.8 times the alpha channel value
+# If the color has no alpha channel, it's set to 200 (the default is 255).
+TRANSPARENT_COLORS = list(map(lambda x: (*x[:3], (200 if len(x) == 3 else 0.8 * x[3])), rgb_colors))
 
 X_COORD = 0
 Y_COORD = 1
@@ -34,40 +43,43 @@ class ChineseCheckersGame:
         pygame.display.set_caption("Chinese Checkers")
 
         self._screen.fill(FRAME_COLOR)  # Set the background color
-        self._create_board()
-        # self._draw_hexagram()
+
+        # Dictionary to store the positions of the cells in
+        # outer triangles by color.
+        self._color_positions: Dict[str, List[Tuple[float, float]]] = {}
+
+        self._create_board()  # Create the game board
 
     def _create_board(self):
 
-        # Draw the game board (hexagonal grid)
+        # Draw the game board
         center_x = FRAME_WIDTH // 2
         center_y = FRAME_HEIGHT // 2
         board_x0 = center_x - BOARD_WIDTH // 2
         board_y0 = center_y - BOARD_HEIGHT // 2
 
         # Draw the inner board
-
         pygame.draw.rect(self._screen, BOARD_COLOR,
                          (board_x0, board_y0, BOARD_WIDTH, BOARD_HEIGHT))
 
         # Draw the outer frame
         pygame.draw.rect(self._screen, OUTER_COLOR,
-                         (board_x0, board_y0, BOARD_WIDTH, BOARD_HEIGHT), 4)
+                         (board_x0, board_y0, BOARD_WIDTH, BOARD_HEIGHT), 7)
 
-        # Adding the label "Chinese Checkers"
-        font = pygame.font.SysFont("Courier", 32)
-        label_text = "Chinese Checkers"
-
-        # Creating the label surface, with the text,
-        # smooth edges and black color
-        label_surface = font.render(label_text, True, (0, 0, 0))
-
-        # Getting the rectangle of the label surface,
-        # so that the label is centered inside of it.
-        label_rect = label_surface.get_rect(center=(FRAME_WIDTH // 2, 30))
-
-        # Placing the text label on the screen.
-        self._screen.blit(label_surface, label_rect)
+        # # Adding the label "Chinese Checkers"
+        # font = pygame.font.SysFont("Courier", 32)
+        # label_text = "Chinese Checkers"
+        #
+        # # Creating the label surface, with the text,
+        # # smooth edges and black color
+        # label_surface = font.render(label_text, True, (0, 0, 0))
+        #
+        # # Getting the rectangle of the label surface,
+        # # so that the label is centered inside of it.
+        # label_rect = label_surface.get_rect(center=(FRAME_WIDTH // 2, 30))
+        #
+        # # Placing the text label on the screen.
+        # self._screen.blit(label_surface, label_rect)
 
         # Call the method to draw the hexagram
         self._draw_hexagram()
@@ -77,7 +89,8 @@ class ChineseCheckersGame:
         cos_30 = math.cos(math.pi / 6)
         sin_30 = math.sin(math.pi / 6)
         size_ratio = 0.90  # The ratio of the hexagram size to the board
-        radius_of_cells = 7.2  # The radius of the cells in the board
+        radius_of_cells = 9  # The radius of the cells in the board
+        radius_of_peds = 5  # The radius of the center cells in the board
 
         # Calculate the center of the board, to ensure that the hexagram is drawn
         # in its center.
@@ -100,12 +113,12 @@ class ChineseCheckersGame:
 
         # Calculate the coordinates of the six points of the hexagram
         points = [
-            (center_x, center_y - hexagram_size),  # Top
-            (center_x + hexagram_size * cos_30, center_y - hexagram_size * sin_30),  # Top-right
-            (center_x + hexagram_size * cos_30, center_y + hexagram_size * sin_30),  # Bottom-right
-            (center_x, center_y + hexagram_size),  # Bottom
-            (center_x - hexagram_size * cos_30, center_y + hexagram_size * sin_30),  # Bottom-left
-            (center_x - hexagram_size * cos_30, center_y - hexagram_size * sin_30)  # Top-left
+            (center_x, center_y - hexagram_size - 5),  # Top
+            (center_x + hexagram_size * cos_30 + 9, center_y - hexagram_size * sin_30),  # Top-right
+            (center_x + hexagram_size * cos_30 + 9, center_y + hexagram_size * sin_30),  # Bottom-right
+            (center_x, center_y + hexagram_size + 5),  # Bottom
+            (center_x - hexagram_size * cos_30 - 9, center_y + hexagram_size * sin_30),  # Bottom-left
+            (center_x - hexagram_size * cos_30 - 9, center_y - hexagram_size * sin_30)  # Top-left
         ]
 
         # Defining the indices for creating the triangles.
@@ -123,7 +136,7 @@ class ChineseCheckersGame:
 
         # Draw two big triangles that form the hexagram on the temporary surface
         for i in range(len(indices)):
-            triangle_points = [points[j] for j in indices[i]]
+            triangle_points = [(points[j]) for j in indices[i]]
             pygame.draw.polygon(temp_surface, hexagram_color, triangle_points)
 
         # Doing this seperately so the cells will be drawn on top of the hexagram
@@ -132,10 +145,14 @@ class ChineseCheckersGame:
             rotation_angle = 60
 
             self._draw_cells(temp_surface, points[q],
-                             radius_of_cells, COLORS[q],
+                             radius_of_cells, TRANSPARENT_COLORS[q],
                              rotation_angle * q)
 
-        self._draw_center_cells(temp_surface, radius_of_cells - 1, "brown")
+        # Draw the 61 center cells
+        self._draw_center_cells(temp_surface, radius_of_cells, "darkred")
+
+        # Place the peds in the outer cells
+        self._place_peds(temp_surface, radius_of_peds)
 
         # Blit the temporary surface onto the screen surface
         self._screen.blit(temp_surface, (0, 0))
@@ -170,7 +187,7 @@ class ChineseCheckersGame:
                     surface: pygame.Surface,
                     point: Tuple[float, float],
                     radius: float,
-                    color: str,
+                    color: Tuple,
                     angle: int) -> None:
 
         # Calculating an setting the distance between each cell and
@@ -192,10 +209,23 @@ class ChineseCheckersGame:
                 x = (point[X_COORD] - (cells_in_row - 1) *
                      dist / 2 + j * dist)
 
+                # Rotate the point
                 rotated_x, rotated_y = self._rotate_point((x, y),
                                                           point[X_COORD],
                                                           point[Y_COORD],
                                                           angle)
+
+                # (Actually it doesn't matter to convert the color to a name,
+                # I'm doing it so the dictionary will be prettier to see)
+                color_name = funcs.rgba_to_name(color)
+
+                # Add the position of the cell to the dictionary of positions,
+                # at the key of the color of the cell.
+                if color_name not in self._color_positions:
+                    self._color_positions[color_name] = [(rotated_x, rotated_y)]
+
+                else:
+                    self._color_positions[color_name].append((rotated_x, rotated_y))
 
                 # Draw the cell
                 pygame.draw.circle(surface, color,
@@ -205,28 +235,57 @@ class ChineseCheckersGame:
     def _draw_center_cells(surface: pygame.Surface, radius_center_cells: float,
                            color: str):
 
-        # The distance between the centers of adjacent cells
-        dist = 2 * radius_center_cells + 20  # 20 is the padding between the cells
-
-        # The number of cells on each side of the hexagon
-        cells_on_side = 5
-
         # The center of the hexagon that the center cells are forming is
         # also the center of the screen
         center_x = FRAME_WIDTH // 2
         center_y = FRAME_HEIGHT // 2
 
-        for i in range(cells_on_side):
-            for j in range(cells_on_side):
-                # Calculate the x and y coordinates of the current cell
-                x = center_x - (
-                            cells_on_side - 1) * dist / 2 + j * dist + i * dist / 2
-                y = center_y - (cells_on_side - 1) * dist / 2 + i * dist
+        # The distance between the centers of adjacent cells
+        dist = 2 * radius_center_cells + 15  # 15 is the padding between the cells
+
+        # The number of cells on each side of the hexagon
+        rows = 9
+
+        for i in range(rows):
+
+            # The number of cells in the current row
+            cells_in_row = 5 + i
+            if i > rows // 2:
+                cells_in_row = 5 + rows - i - 1
+
+            # Calculate the y coordinate of the current row
+            # (We deduct from the dest to make the hexagon more proportional)
+            y = center_y - (rows - 1) * dist / 2 + i * (dist - 3) + 12
+
+            # # Adjust the y coordinate to ensure center cells are spaced properly
+            # if i % 2 == 0:  # Only adjust for even indices
+
+            # Avoid adjusting the first last and middle cells in a row
+            if i != 0 and i != cells_in_row - 1 and i != cells_in_row // 2 + 1:
+                y += dist / 12
+
+            for j in range(cells_in_row):
+
+                # Calculate the x coordinate of the current cell.
+                # Appending 3 to the dist to make the hexagon more proportional
+                # in the x axis.
+                x = (center_x - (cells_in_row - 1) * (dist+4) / 2 + j * (dist+4))
 
                 # Draw the cell
                 pygame.draw.circle(surface, color, (int(x), int(y)),
-                                   int(radius_center_cells))
+                                   radius_center_cells)
 
+    def _place_peds(self, surface: pygame.Surface, radius_peds: float) -> None:
+
+        for color in self._color_positions.keys():
+            for position in self._color_positions[color]:
+
+                # Draw the ped inside the position of the cell
+                # (because its radius is smaller than the cell's one),
+                # and with the color of the cell but full opaque
+                pygame.draw.circle(surface, color,
+                                   (position[X_COORD], position[Y_COORD]),
+                                   radius_peds)
 
     def run(self):
 
