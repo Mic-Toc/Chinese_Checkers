@@ -31,7 +31,7 @@ X_COORD = 0
 Y_COORD = 1
 
 
-class ChineseCheckersGame:
+class InitGui:
 
     def __init__(self):
 
@@ -48,15 +48,19 @@ class ChineseCheckersGame:
         # outer triangles by color.
         self._color_positions: Dict[str, List[Tuple[float, float]]] = {}
 
+        # List to store the positions of the cells in
+        # the center of the board.
+        self._center_positions: List[Tuple[float, float]] = []
+
         self._create_board()  # Create the game board
 
     def _create_board(self):
 
         # Draw the game board
-        center_x = FRAME_WIDTH // 2
-        center_y = FRAME_HEIGHT // 2
-        board_x0 = center_x - BOARD_WIDTH // 2
-        board_y0 = center_y - BOARD_HEIGHT // 2
+        center_x = FRAME_WIDTH / 2
+        center_y = FRAME_HEIGHT / 2
+        board_x0 = center_x - BOARD_WIDTH / 2
+        board_y0 = center_y - BOARD_HEIGHT / 2
 
         # Draw the inner board
         pygame.draw.rect(self._screen, BOARD_COLOR,
@@ -89,8 +93,12 @@ class ChineseCheckersGame:
         cos_30 = math.cos(math.pi / 6)
         sin_30 = math.sin(math.pi / 6)
         size_ratio = 0.90  # The ratio of the hexagram size to the board
-        radius_of_cells = 9  # The radius of the cells in the board
-        radius_of_peds = 5  # The radius of the center cells in the board
+        radius_cells = 9.3  # The radius of the cells in the board
+        radius_peds = 4.7  # The radius of the center cells in the board
+
+        # The distance between the centers of adjacent cells in
+        # the center of the board.
+        self._cells_dist = 2 * radius_cells + 15  # 15 is the padding between the cells
 
         # Calculate the center of the board, to ensure that the hexagram is drawn
         # in its center.
@@ -99,8 +107,8 @@ class ChineseCheckersGame:
         # the frame dimensions represent the total dimensions of the frame including
         # any borders or padding, while the board dimensions represent the inner dimensions
         # of the board excluding any borders or padding.
-        center_y = FRAME_HEIGHT // 2
-        center_x = FRAME_WIDTH // 2
+        center_y = FRAME_HEIGHT / 2
+        center_x = FRAME_WIDTH / 2
 
         # Calculating the size of the hexagram based on the board size.
         # The hexagram will be inside the board.
@@ -113,12 +121,12 @@ class ChineseCheckersGame:
 
         # Calculate the coordinates of the six points of the hexagram
         points = [
-            (center_x, center_y - hexagram_size - 5),  # Top
-            (center_x + hexagram_size * cos_30 + 9, center_y - hexagram_size * sin_30),  # Top-right
-            (center_x + hexagram_size * cos_30 + 9, center_y + hexagram_size * sin_30),  # Bottom-right
-            (center_x, center_y + hexagram_size + 5),  # Bottom
-            (center_x - hexagram_size * cos_30 - 9, center_y + hexagram_size * sin_30),  # Bottom-left
-            (center_x - hexagram_size * cos_30 - 9, center_y - hexagram_size * sin_30)  # Top-left
+            (center_x, center_y - hexagram_size),  # Top
+            (center_x + hexagram_size * cos_30, center_y - hexagram_size * sin_30),  # Top-right
+            (center_x + hexagram_size * cos_30, center_y + hexagram_size * sin_30),  # Bottom-right
+            (center_x, center_y + hexagram_size),  # Bottom
+            (center_x - hexagram_size * cos_30, center_y + hexagram_size * sin_30),  # Bottom-left
+            (center_x - hexagram_size * cos_30, center_y - hexagram_size * sin_30)  # Top-left
         ]
 
         # Defining the indices for creating the triangles.
@@ -144,15 +152,15 @@ class ChineseCheckersGame:
 
             rotation_angle = 60
 
-            self._draw_cells(temp_surface, points[q],
-                             radius_of_cells, TRANSPARENT_COLORS[q],
-                             rotation_angle * q)
+            self._draw_outer_cells(temp_surface, points[q], radius_cells,
+                                   TRANSPARENT_COLORS[q], rotation_angle * q)
 
         # Draw the 61 center cells
-        self._draw_center_cells(temp_surface, radius_of_cells, "darkred")
+        self._draw_center_cells(temp_surface, radius_cells,
+                                "darkred")
 
         # Place the peds in the outer cells
-        self._place_peds(temp_surface, radius_of_peds)
+        self._place_peds(temp_surface, radius_peds)
 
         # Blit the temporary surface onto the screen surface
         self._screen.blit(temp_surface, (0, 0))
@@ -183,16 +191,13 @@ class ChineseCheckersGame:
 
         return new_x, new_y
 
-    def _draw_cells(self,
-                    surface: pygame.Surface,
-                    point: Tuple[float, float],
-                    radius: float,
-                    color: Tuple,
-                    angle: int) -> None:
+    def _draw_outer_cells(self,
+                          surface: pygame.Surface,
+                          point: Tuple[float, float],
+                          radius: float,
+                          color: Tuple,
+                          angle: int) -> None:
 
-        # Calculating an setting the distance between each cell and
-        # setting the number of rows
-        dist = 2 * radius + 17  # 17 is the padding between the cells
         rows = 4
 
         for i in range(rows):
@@ -201,13 +206,14 @@ class ChineseCheckersGame:
             cells_in_row = i + 1
 
             # Calculate the y coordinate of the current row
-            y = point[Y_COORD] + i * dist
+            y = point[Y_COORD] + i * self._cells_dist
 
             for j in range(cells_in_row):
 
                 # Calculate the x coordinate of the current cell
+                # (We deduct from the dest to make the triangles more proportional)
                 x = (point[X_COORD] - (cells_in_row - 1) *
-                     dist / 2 + j * dist)
+                     self._cells_dist / 2 + j * self._cells_dist)
 
                 # Rotate the point
                 rotated_x, rotated_y = self._rotate_point((x, y),
@@ -231,17 +237,13 @@ class ChineseCheckersGame:
                 pygame.draw.circle(surface, color,
                                    (rotated_x, rotated_y), radius)
 
-    @staticmethod
-    def _draw_center_cells(surface: pygame.Surface, radius_center_cells: float,
-                           color: str):
+    def _draw_center_cells(self, surface: pygame.Surface,
+                           radius_center_cells: float, color: str) -> None:
 
         # The center of the hexagon that the center cells are forming is
         # also the center of the screen
-        center_x = FRAME_WIDTH // 2
-        center_y = FRAME_HEIGHT // 2
-
-        # The distance between the centers of adjacent cells
-        dist = 2 * radius_center_cells + 15  # 15 is the padding between the cells
+        center_x = FRAME_WIDTH / 2
+        center_y = FRAME_HEIGHT / 2
 
         # The number of cells on each side of the hexagon
         rows = 9
@@ -255,21 +257,24 @@ class ChineseCheckersGame:
 
             # Calculate the y coordinate of the current row
             # (We deduct from the dest to make the hexagon more proportional)
-            y = center_y - (rows - 1) * dist / 2 + i * (dist - 3) + 12
+            y = (center_y - (rows - 1) * self._cells_dist / 2 +
+                 i * (self._cells_dist - 3) + 12)
 
-            # # Adjust the y coordinate to ensure center cells are spaced properly
-            # if i % 2 == 0:  # Only adjust for even indices
-
-            # Avoid adjusting the first last and middle cells in a row
-            if i != 0 and i != cells_in_row - 1 and i != cells_in_row // 2 + 1:
-                y += dist / 12
+            # # Adjusting the y coordinate to ensure center cells are spaced properly,
+            # # but avoiding adjusting the first last and middle cells in a row
+            # if i != 0 and i != cells_in_row - 1 and i != cells_in_row // 2 + 1:
+            #     y += self.cells_dist / 12
 
             for j in range(cells_in_row):
 
                 # Calculate the x coordinate of the current cell.
                 # Appending 3 to the dist to make the hexagon more proportional
                 # in the x axis.
-                x = (center_x - (cells_in_row - 1) * (dist+4) / 2 + j * (dist+4))
+                x = (center_x - (cells_in_row - 1) * self._cells_dist / 2 +
+                     j * self._cells_dist)
+
+                # Appending the coordinates to the list of center positions
+                self._center_positions.append((x, y))
 
                 # Draw the cell
                 pygame.draw.circle(surface, color, (int(x), int(y)),
@@ -286,6 +291,15 @@ class ChineseCheckersGame:
                 pygame.draw.circle(surface, color,
                                    (position[X_COORD], position[Y_COORD]),
                                    radius_peds)
+
+    def get_color_positions_dict(self):
+        return self._color_positions
+
+    def get_center_positions_list(self):
+        return self._center_positions
+
+    def get_cell_distance(self):
+        return self._cells_dist
 
     def run(self):
 
@@ -313,7 +327,7 @@ def test_rotation():
     angle = 90  # Rotation angle in degrees
 
     # Test rotation
-    rotated_point = ChineseCheckersGame._rotate_point(point, center_x, center_y, angle)
+    rotated_point = InitGui._rotate_point(point, center_x, center_y, angle)
     print(rotated_point)
 
 
@@ -348,19 +362,16 @@ def test_triangle_placement():
 
         for point_index in triangle_points:
             # Rotate the current point around the center of the triangle
-            rotated_point = ChineseCheckersGame._rotate_point(points[point_index],
-                                          triangle_center_x, triangle_center_y,
-                                          i * -60)
+            rotated_point = InitGui._rotate_point(points[point_index],
+                                                  triangle_center_x,
+                                                  triangle_center_y,
+                                                  i * -60)
             print(rotated_point)
 
 
 if __name__ == "__main__":
 
-    game = ChineseCheckersGame()  # Creating the game object
+    game = InitGui()  # Creating the game object
     # test_rotation()  # Testing the rotation function
     test_triangle_placement()  # Testing the triangle placement
     game.run()  # Running the game
-
-
-
-

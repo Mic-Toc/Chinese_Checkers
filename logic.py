@@ -2,11 +2,13 @@ import sys
 import pygame
 import peds
 import board
+from pygame_switch import InitGui
 
 
-class ChineseCheckersLogic:
+class ChineseCheckersGame:
 
     def __init__(self) -> None:
+
         self._board = board.Board()
         self._players = []
         self._current_player = None
@@ -33,3 +35,10 @@ class ChineseCheckersLogic:
             pygame.display.flip()  # Update the display
 
             clock.tick(60)  # 60 frames per second
+
+
+if __name__ == "__main__":
+
+    game = ChineseCheckersGame()  # Creating the game object
+
+    game.run()  # Running the game
