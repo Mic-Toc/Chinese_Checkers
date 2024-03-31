@@ -5,11 +5,15 @@ import sys
 import math
 import funcs
 
+from ped import Ped
+
 # Constants
 OUTER_COLOR = "#CDC8B1"
 FRAME_COLOR = "#f0e4bb"
 
 BOARD_COLOR = "burlywood4"
+
+CENTER_CELLS_COLOR = "darkred"
 
 FRAME_HEIGHT = 590
 FRAME_WIDTH = 930
@@ -17,15 +21,19 @@ FRAME_WIDTH = 930
 BOARD_HEIGHT = 0.95 * FRAME_HEIGHT
 BOARD_WIDTH = 0.6 * FRAME_WIDTH
 
-COLORS = ["cyan", "green", "grey", "purple", "yellow", "lavenderblush"]
+COLORS = ["Aqua", "green", "grey", "purple", "yellow", "lavenderblush"]
 
 rgb_colors = list(map(lambda x: funcs.convert_to_rgb(x), COLORS))
 
 # Add transparency to the colors (x[:3] is the RGB part of the color,
 # x[3] is the alpha channel).
-# If the color has an alpha channel, it's set to 0.8 times the alpha channel value
-# If the color has no alpha channel, it's set to 200 (the default is 255).
-TRANSPARENT_COLORS = list(map(lambda x: (*x[:3], (200 if len(x) == 3 else 0.8 * x[3])), rgb_colors))
+# If the color has an alpha channel, it's set to 0.7 times the alpha channel value
+# If the color has no alpha channel, it's set to 180 (the default is 255).
+TRANSPARENT_COLORS = list(map(lambda x: (*x[:3], (180 if len(x) == 3 else 0.7 * x[3])), rgb_colors))
+
+HIGHLIGHT_COLOR = (255, 212, 78)  # Yellow  # 101
+
+Coordinates = Tuple[float, float]
 
 X_COORD = 0
 Y_COORD = 1
@@ -38,6 +46,15 @@ class InitGui:
         # Initialize the game
         pygame.init()
         self._screen = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
+
+        # Creating a new surface with an alpha channel, so the hexagram
+        # could be transparent
+        self._temp_surface = pygame.Surface((FRAME_WIDTH, FRAME_HEIGHT),
+                                            pygame.SRCALPHA)
+
+        # Creating a new surface for the highlighting
+        self._highlight_surface = pygame.Surface((FRAME_WIDTH, FRAME_HEIGHT),
+                                                 pygame.SRCALPHA)
 
         # make the window title
         pygame.display.set_caption("Chinese Checkers")
@@ -52,9 +69,14 @@ class InitGui:
         # the center of the board.
         self._center_positions: List[Tuple[float, float]] = []
 
-        self._create_board()  # Create the game board
+        # Setting a previous state property to revert the
+        # current state when needed
+        self._previous_state = None
 
-    def _create_board(self):
+        self.create_board()  # Create the game board
+
+    def create_board(self):
+        """Creating or updating the game board, depending on the state of the game."""
 
         # Draw the game board
         center_x = FRAME_WIDTH / 2
@@ -88,17 +110,20 @@ class InitGui:
         # Call the method to draw the hexagram
         self._draw_hexagram()
 
+        # Update the display
+        pygame.display.flip()
+
     def _draw_hexagram(self):
 
         cos_30 = math.cos(math.pi / 6)
         sin_30 = math.sin(math.pi / 6)
         size_ratio = 0.90  # The ratio of the hexagram size to the board
-        radius_cells = 9.3  # The radius of the cells in the board
-        radius_peds = 4.7  # The radius of the center cells in the board
+        self._radius_cells = 9.3  # The radius of the cells in the board
+        self._radius_peds = 6.7  # The radius of the center cells in the board
 
         # The distance between the centers of adjacent cells in
         # the center of the board.
-        self._cells_dist = 2 * radius_cells + 15  # 15 is the padding between the cells
+        self._cells_dist = 2 * self._radius_cells + 15  # 15 is the padding between the cells
 
         # Calculate the center of the board, to ensure that the hexagram is drawn
         # in its center.
@@ -138,32 +163,28 @@ class InitGui:
 
         hexagram_color = (*board_color_rgb[:3], transparency)
 
-        # Creating a new surface with an alpha channel, so the hexagram
-        # could be transparent
-        temp_surface = pygame.Surface((FRAME_WIDTH, FRAME_HEIGHT), pygame.SRCALPHA)
-
         # Draw two big triangles that form the hexagram on the temporary surface
         for i in range(len(indices)):
             triangle_points = [(points[j]) for j in indices[i]]
-            pygame.draw.polygon(temp_surface, hexagram_color, triangle_points)
+            pygame.draw.polygon(self._temp_surface, hexagram_color, triangle_points)
 
         # Doing this seperately so the cells will be drawn on top of the hexagram
         for q in range(len(points)):
 
             rotation_angle = 60
 
-            self._draw_outer_cells(temp_surface, points[q], radius_cells,
+            self._draw_outer_cells(self._temp_surface, points[q], self._radius_cells,
                                    TRANSPARENT_COLORS[q], rotation_angle * q)
 
         # Draw the 61 center cells
-        self._draw_center_cells(temp_surface, radius_cells,
-                                "darkred")
+        self._draw_center_cells(self._temp_surface, self._radius_cells,
+                                CENTER_CELLS_COLOR)
 
         # Place the peds in the outer cells
-        self._place_peds(temp_surface, radius_peds)
+        self._place_peds(self._temp_surface, self._radius_peds)
 
         # Blit the temporary surface onto the screen surface
-        self._screen.blit(temp_surface, (0, 0))
+        self._screen.blit(self._temp_surface, (0, 0))
 
     @staticmethod
     def _rotate_point(point: Tuple[float, float],
@@ -206,14 +227,14 @@ class InitGui:
             cells_in_row = i + 1
 
             # Calculate the y coordinate of the current row
-            y = point[Y_COORD] + i * self._cells_dist
+            y = point[Y_COORD] + i * self._cells_dist + 4  # 4 is the padding between the rows
 
             for j in range(cells_in_row):
 
                 # Calculate the x coordinate of the current cell
                 # (We deduct from the dest to make the triangles more proportional)
                 x = (point[X_COORD] - (cells_in_row - 1) *
-                     self._cells_dist / 2 + j * self._cells_dist)
+                     (self._cells_dist+4) / 2 + j * (self._cells_dist+4))
 
                 # Rotate the point
                 rotated_x, rotated_y = self._rotate_point((x, y),
@@ -223,6 +244,7 @@ class InitGui:
 
                 # (Actually it doesn't matter to convert the color to a name,
                 # I'm doing it so the dictionary will be prettier to see)
+                # Getting the color name without a transparency value
                 color_name = funcs.rgba_to_name(color)
 
                 # Add the position of the cell to the dictionary of positions,
@@ -281,16 +303,155 @@ class InitGui:
                                    radius_center_cells)
 
     def _place_peds(self, surface: pygame.Surface, radius_peds: float) -> None:
+        """Place the peds in the initial positions at the start of the game."""
 
-        for color in self._color_positions.keys():
-            for position in self._color_positions[color]:
+        for color, positions in self._color_positions.items():
+            for position in positions:
 
                 # Draw the ped inside the position of the cell
                 # (because its radius is smaller than the cell's one),
                 # and with the color of the cell but full opaque
+                try:
+                    pygame.draw.circle(surface, color,
+                                       (position[X_COORD], position[Y_COORD]),
+                                       radius_peds)
+
+                    # Adding a small frame around the circle
+                    if color != "black":
+                        pygame.draw.circle(surface, "black",
+                                           (position[X_COORD], position[Y_COORD]),
+                                           radius_peds, 1)
+
+                    else:
+                        pygame.draw.circle(surface, "white",
+                                           (position[X_COORD], position[Y_COORD]),
+                                           radius_peds, 1)
+
+                except Exception as e:
+                    print(e)
+
+        # update the screen
+        pygame.display.flip()
+
+    def update_ped(self, surface: pygame.Surface,
+                   old_position: Coordinates, ped: Ped) -> None:
+        """Update the positions of the peds on the screen according to the
+        given positions."""
+
+        # Clear the screen
+        surface.fill((0, 0, 0, 0))
+
+        removed = False
+        # Remove the ped from its previous position:
+        # if the ped was in the outer triangles
+        for color, positions in self._color_positions.items():
+            if old_position in positions:
+
                 pygame.draw.circle(surface, color,
-                                   (position[X_COORD], position[Y_COORD]),
-                                   radius_peds)
+                                   old_position, self._radius_cells)
+                removed = True
+                break
+
+        # if the ped was in the center hexagon
+        if not removed:
+            pygame.draw.circle(surface, CENTER_CELLS_COLOR,
+                               old_position, self._radius_cells)
+
+        # Draw the peds in their new positions
+        try:
+            pygame.draw.circle(surface, ped.get_color(),
+                               ped.get_location(), self._radius_peds)
+
+            # Adding a small frame around the circle
+            if ped.get_color() != "black":
+                pygame.draw.circle(surface, "black",
+                                   ped.get_location(), self._radius_peds, 1)
+
+            else:
+                pygame.draw.circle(surface, "white",
+                                   ped.get_location(), self._radius_peds, 1)
+
+        except Exception as e:
+            print(e)
+
+        # Blit the surface on the screen
+        self._screen.blit(surface, (0, 0))
+
+        # Update the screen
+        pygame.display.flip()
+
+    def highlight_locations(self, surface: pygame.Surface,
+                            positions: List[Tuple[float, float]]) -> None:
+        # Store the previous surface
+        self._previous_state = self._screen.copy()
+
+        # Clear the previous highlights
+        surface.fill((0, 0, 0, 0))
+
+        for position in positions:
+            pygame.draw.circle(surface, HIGHLIGHT_COLOR,
+                               (position[X_COORD], position[Y_COORD]),
+                               self._radius_cells, 3)
+
+        # Blit the highlight surface on the temp surface
+        self._screen.blit(surface, (0, 0))
+        pygame.display.flip()  # Update the display
+
+    def unhighlight_surface(self, surface: pygame.Surface) -> None:
+
+        # Clear the previous highlights
+        surface.fill((0, 0, 0, 0))
+
+        # # Blit the highlight surface on the temp surface
+        # self._temp_surface.blit(surface, (0, 0))
+
+        # Restore the previous state, if needed
+        if self._previous_state is not None:
+            self._screen.blit(self._previous_state, (0, 0))
+            pygame.display.flip()  # Update the display
+            self._previous_state = None  # Reset the previous state
+
+        # Blit the highlight surface on the main surface
+        self._screen.blit(surface, (0, 0))
+        pygame.display.flip()  # Update the display
+
+    def show_message(self, message: str) -> None:
+        """Showing a message to the user."""
+
+        self._previous_state = self._screen.copy()
+
+        # Display the message on the screen
+        font = pygame.font.SysFont("Courier", 18)
+        text = font.render(message, True, (0, 0, 0))
+
+        # Get the rectangle of the text
+        text_rect = text.get_rect(center=(FRAME_WIDTH / 2, FRAME_HEIGHT / 2))
+
+        # Create a surface to display the text on
+        text_surface = pygame.Surface((text_rect.width + 5,
+                                      text_rect.height + 5))
+        text_surface.fill((255, 255, 255))  # Fill the surface with white
+
+        # Blit the text on the surface
+        text_rect.center = text_surface.get_rect().center
+        text_surface.blit(text, text_rect)
+
+        # Blit the text on the surface
+        self._screen.blit(text_surface, (FRAME_WIDTH / 2 - text_rect.width / 2,
+                                         FRAME_HEIGHT / 2 - text_rect.height / 2))
+        pygame.display.flip()  # Update the display
+
+    def clear_message(self) -> None:
+        """Clearing the message from the screen."""
+
+        # Restore the previous state, if needed
+        if self._previous_state is not None:
+            self._screen.blit(self._previous_state, (0, 0))
+            pygame.display.flip()  # Update the display
+            self._previous_state = None  # Reset the previous state
+
+    # def update(self, positions: List[Tuple[float, float]]) -> None:
+    #     """Update the screen with the new positions."""
 
     def get_color_positions_dict(self):
         return self._color_positions
@@ -300,6 +461,12 @@ class InitGui:
 
     def get_cell_distance(self):
         return self._cells_dist
+
+    def get_temp_surface(self):
+        return self._temp_surface
+
+    def get_highlight_surface(self):
+        return self._highlight_surface
 
     def run(self):
 

@@ -51,3 +51,17 @@ def rgba_to_name(color):
     # If the color is not listed above, return it as a string of rgb or
     # rgba format, depending on the exception raised above.
     return str(color)
+
+def make_transparent(color, alpha):
+    """Make a color transparent by adding an alpha channel."""
+
+    # If the color is already in RGBA, return it as is
+    if isinstance(color, tuple) and len(color) == 4 and re.match(r'^\d+$', str(color[0])):
+        return color
+
+    # If the color is in RGB, add an alpha channel to it
+    if isinstance(color, tuple) and len(color) == 3:
+        return color + (alpha,)
+
+    # If the color is not listed above, return default color
+    return make_transparent(convert_to_rgb("#CDAA7D"), alpha)

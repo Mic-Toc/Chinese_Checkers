@@ -1,9 +1,8 @@
-from typing import Tuple, List, Dict, Union, Set
-import pygame
-from peds import Peds
+from typing import Tuple, List, Dict, Union, Set, Optional
+from ped import Ped
 from pygame_switch import InitGui
 
-Coordinates = Tuple[int, int]
+Coordinates = Tuple[float, float]
 
 # Constants from the GUI
 FRAME_HEIGHT = 590
@@ -18,8 +17,6 @@ Y_COORD = 1
 class Board:
 
     def __init__(self) -> None:
-
-        board: Dict[Coordinates, Union[Peds, None]] = dict()
 
         # # creating a dictionary whose keys are coordinates
         # # and values are peds or None, depending on if
@@ -38,10 +35,18 @@ class Board:
         #
         #     board[coordinate] = None
 
+        self._peds: List[Ped] = []
+        self.gui = InitGui()
+
+        board: Dict[Coordinates, Union[Ped, None]] = dict()
+
+        # Getting the locations of all cells from the gui object
+        all_locations = self.get_all_positions()
+        for location in all_locations:
+            board[location] = None
+
         self._board = board
 
-        self._peds: List[Peds] = []
-        self._gui = InitGui()
         # self._convert_gui_location_dict()
 
     # def create_location_dict(self) -> Dict[int, Tuple[int, int]]:
@@ -123,14 +128,16 @@ class Board:
     #
     #         player_index += 1
 
-    def _place_ped(self, ped: Peds) -> None:
+    def place_peds(self, peds: List[Ped]) -> None:
+        """Placing the given peds on their initial locations on the board."""
 
-        if ped in self._peds:
-            raise Exception("This ped already exists")
+        for ped in peds:
+            if ped in self._peds:
+                raise Exception("This ped already exists")
 
-        # else, place the ped on the board
-        self._board[ped.get_location()] = ped
-        self._peds.append(ped)
+            # else, place the ped on the board
+            self._board[ped.get_location()] = ped
+            self._peds.append(ped)  # add the ped to the list of peds
 
     # def possible_moves(self, ped: Peds) -> List[Coordinates]:
     #     """Return a list of possible moves for the given ped."""
@@ -142,15 +149,15 @@ class Board:
         """Return a list of the neighbor positions of the given position."""
 
         neighbors = []
-        cell_dist = self._gui.get_cell_distance()
+        cell_dist = self.gui.get_cell_distance()
 
         # Define the bounding box around the cell based on its distance from
-        # other cells. We multiply by 1.5 because the placement between
+        # other cells. We multiply by 1.1 because the placement between
         # several cells is not exact, so we need to take a larger area.
-        min_x = curr_pos[X_COORD] - cell_dist * 1.5
-        max_x = curr_pos[X_COORD] + cell_dist * 1.5
-        min_y = curr_pos[Y_COORD] - cell_dist * 1.5
-        max_y = curr_pos[Y_COORD] + cell_dist * 1.5
+        min_x = curr_pos[X_COORD] - cell_dist * 1.3
+        max_x = curr_pos[X_COORD] + cell_dist * 1.3
+        min_y = curr_pos[Y_COORD] - cell_dist * 1.3
+        max_y = curr_pos[Y_COORD] + cell_dist * 1.3
 
         def is_valid_neighbor(position: Coordinates) -> bool:
             """Return True if the given position is valid, False otherwise.
@@ -161,28 +168,33 @@ class Board:
 
             return min_x <= x <= max_x and min_y <= y <= max_y
 
-        # Iterate through the positions of the dictionary of the gui object,
-        # and check if the position is a valid neighbor.
-        for color, positions in self._gui.get_color_positions_dict().items():
-            for pos in positions:
-                if pos != curr_pos and is_valid_neighbor(pos):
-                    neighbors.append(pos)
+        # # Iterate through the positions of the dictionary of the gui object,
+        # # and check if the position is a valid neighbor.
+        # for color, positions in self.gui.get_color_positions_dict().items():
+        #     for pos in positions:
+        #         if pos != curr_pos and is_valid_neighbor(pos):
+        #             neighbors.append(pos)
+        #
+        # # Iterate through the center positions list of the gui object,
+        # # and check if the position is a valid neighbor.
+        # for pos in self.gui.get_center_positions_list():
+        #     if pos != curr_pos and is_valid_neighbor(pos):
+        #         neighbors.append(pos)
 
-        # Iterate through the center positions list of the gui object,
+        # Iterate through all the positions of the board,
         # and check if the position is a valid neighbor.
-        for pos in self._gui.get_center_positions_list():
+        for pos in self.get_all_positions():
             if pos != curr_pos and is_valid_neighbor(pos):
                 neighbors.append(pos)
 
+        # print("pos: ", curr_pos, "neighbors:", neighbors)
         return neighbors
 
-    def _is_valid_move(self, ped: Peds, end_location: Coordinates) -> bool:
+    def _is_valid_move(self, curr_location: Coordinates,
+                       end_location: Coordinates) -> bool:
         """Return True if the move is valid, False otherwise.
         Assumes that the new location is one of the locations
         of the dictionary or list from the gui."""
-
-        # get the ped's current location
-        curr_location = ped.get_location()
 
         # if the new location is occupied by another ped,
         # the move is invalid
@@ -190,41 +202,46 @@ class Board:
             return False
 
         # if the new location is in the list of neighbors of the current
-        # location, and the new location is not occupied by another ped,
-        # the move is valid
-        if (end_location in self._find_neighbors(curr_location) and
-                self._board[end_location] is None):
+        # location, the move is valid
+        if end_location in self._find_neighbors(curr_location):
+            print("end_location:", end_location)
             return True
 
         # else, we need to check if we can hop over another ped/s
         # to the new location
         else:
+            return self._can_hop_over(curr_location, end_location)
 
-            return self._can_hop_over(ped, end_location)
-
-    def _can_hop_over(self, ped: Peds, end_location: Coordinates,
-                      visited: Set[Coordinates] = None) -> bool:
-        """A recursive function that checks if the given ped can hop over
-        another ped or several ones to the new location.
+    def _can_hop_over(self, curr_location: Coordinates,
+                      end_location: Coordinates,
+                      count=100) -> bool:
+        """A function that checks recursively if we can get from
+        the current location to the new one using a single hop.
         Assumes that the new location is one of the locations
-        of the dictionary or list from the gui."""
+        of the dictionary or list from the gui.
+        Max hops is 100."""
 
-        if visited is None:
-            visited = set()
+        if count == 0:
+            return False
 
-        curr_location = ped.get_location()
+        changed = False
+        new_location = None
 
-        # Add the current location to the visited set
-        visited.add(curr_location)
+        # If the current location is the same as the end location,
+        # we can hop over one time to it
+        print("Came to here!")
+        if curr_location == end_location:
+            print("success!")
+            return True
 
         # Iterate through the neighbors of the current location and
-        # recursively check if hopping over is possible
+        # check if hopping over is possible
         for neighbor in self._find_neighbors(curr_location):
 
             # if the neighbor is not visited and is occupied by a ped,
             # meaning we can possibly hop over it
-            if neighbor not in visited and self._board[neighbor] is not None:
-
+            if self._board[neighbor] is not None:
+                print("neighbor:", neighbor)    # debug
                 # Calculate the new location after hopping over the ped
                 new_x = 2 * neighbor[X_COORD] - curr_location[X_COORD]
                 new_y = 2 * neighbor[Y_COORD] - curr_location[Y_COORD]
@@ -232,25 +249,30 @@ class Board:
 
                 # we need a little bit of offset because the placement
                 # is not perfect
-                offset_x = 5
-                offset_y = 5
+                offset_x = 10
+                offset_y = 10
 
                 changed = False
                 # Check if the new location with the offset is in one of the
                 # list of locations, and if it's not occupied by another ped
-                for color in self._gui.get_color_positions_dict():
-                    for pos in self._gui.get_color_positions_dict()[color]:
+                for colors, positions in self.gui.get_color_positions_dict().items():
+                    for pos in positions:
                         if (new_x - offset_x <= pos[X_COORD] <= new_x + offset_x and
                                 new_y - offset_y <= pos[Y_COORD] <= new_y + offset_y and
-                                self._board[new_location] is None):
+                                self._board[pos] is None):
                             new_location = pos
                             changed = True
 
                 if not changed:
-                    for pos in self._gui.get_center_positions_list():
+                    for pos in self.gui.get_center_positions_list():
+                        if pos == (532.2, 172.6):   # debug
+                            print("pos:", pos, "\nnew_x-offset_x:", new_x - offset_x,
+                                  "new_x+offset_x:", new_x + offset_x)
+                            print("new_y-offset_y:", new_y - offset_y,
+                                  "new_y+offset_y:", new_y + offset_y)
                         if (new_x - offset_x <= pos[X_COORD] <= new_x + offset_x and
                                 new_y - offset_y <= pos[Y_COORD] <= new_y + offset_y and
-                                self._board[new_location] is None):
+                                self._board[pos] is None):
                             new_location = pos
                             changed = True
 
@@ -260,33 +282,103 @@ class Board:
                 if not changed:
                     continue
 
-                # If the new location is the one we want to move to,
-                # then we can hop over the ped
-                if new_location == end_location:
-                    return True
-
-                # else, recursively check if we can hop over the ped
-                # to the new location
-                if self._can_hop_over(ped, end_location, visited):
-                    return True
-
-        # If we couldn't hop over any ped to the new location,
+        # If we couldn't hop over any single ped to the new location,
         # the move is invalid
-        return False
+        if not changed:
+            return False
 
-    def _move_ped(self, ped: Peds, new_location: Coordinates) -> None:
+        else:  # we can hop over the ped,
+            return self._can_hop_over(new_location, end_location, count - 1)
+
+    def find_valid_moves(self, curr_pos: Coordinates,
+                         ) -> List[Coordinates]:
+        """Return a list of valid moves for the given ped."""
+
+        print("Finding valid moves for", curr_pos)
+        valid_moves = []
+
+        # visited.add(curr_pos)
+
+        # Get all the positions of the board
+        all_positions = self.get_all_positions()
+
+        # Iterate through all the positions of the board
+        for position in all_positions:
+
+            # skip the current position
+            if position == curr_pos:
+                continue
+
+            # if the move is valid, add it to the list of valid moves
+            is_valid = self._is_valid_move(curr_pos, position)
+            if is_valid:
+                valid_moves.append(position)
+
+        return valid_moves
+
+    def get_all_positions(self) -> List[Coordinates]:
+        """Return a list of all the positions of the board,
+        retrieved from the gui object."""
+
+        all_positions = []
+
+        for color, positions in self.gui.get_color_positions_dict().items():
+            all_positions.extend(positions)
+
+        all_positions.extend(self.gui.get_center_positions_list())
+
+        return all_positions
+
+    def _find_peds_by_color(self, color: str) -> List[Ped]:
+        """Return a list of peds with the given color."""
+
+        peds_list = []
+
+        for ped in self._peds:
+            if ped.get_color() == color:
+                peds_list.append(ped)
+
+        return peds_list
+
+    def get_ped_by_location(self, location: Coordinates) -> Union[Ped, None]:
+        """Return the ped at the given location.
+        If no ped is found, return None."""
+
+        if location in self._board and self._board[location] is not None:
+            return self._board[location]
+
+        raise KeyError("No ped found at this location")
+
+    def move_ped(self, ped: Ped, new_location: Coordinates) -> None:
+        """Move the ped to the new location."""
 
         if ped not in self._peds:
             raise Exception("This ped does not exist")
 
         # if the new location is not valid, raise an exception
-        if not self._is_valid_move(ped, new_location):
+        if not self._is_valid_move(ped.get_location(), new_location):
             raise Exception("Invalid move")
 
         # else
         # remove the ped from the old location
-        self._board[ped.get_location()] = None
+        old_location = ped.get_location()
+        self._board[old_location] = None
 
         # update the ped's location and place the ped in the new location
         ped.set_location(new_location)
-        self._place_ped(ped)
+        self._board[new_location] = ped
+
+        # update the gui
+        self.gui.update_ped(self.gui.get_temp_surface(),
+                            old_location, ped)
+
+    def get_peds_locations(self) -> List[Coordinates]:
+        """Return a list of all the locations of the peds."""
+
+        locations = []
+
+        for ped in self._peds:
+            locations.append(ped.get_location())
+
+        return locations
+
