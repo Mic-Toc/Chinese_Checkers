@@ -1,10 +1,10 @@
 import sys
-from typing import Tuple, List, Union, Set
+from typing import Tuple, List, Union, Optional
 
 import pygame
 from ped import Ped
 from board import Board
-from pygame_switch import InitGui
+from player import Player
 
 X_COORD = 0
 Y_COORD = 1
@@ -14,17 +14,59 @@ CELL_RADIUS = 9.3
 
 Coordinates = Tuple[float, float]
 
+PLAYER_TURNS = 1
+
+PLAYER_ORDER = [[4, 1, 3, 6, 2, 5],
+                [4, 1, 3, 6],
+                [4, 2, 6],
+                [4, 1]]
+
 
 class ChineseCheckersGame:
 
     def __init__(self, num_players: int) -> None:
 
-        self._board = Board()  # Initialize the board
+        self._board = Board(num_players)  # Initialize the board
+
+        for order in PLAYER_ORDER:
+            if len(order) == num_players:
+                self._player_order = order
+                break
+
         self._gui = self._board.gui  # Initialize the GUI
+
+        self._players: List[Player] = []  # Initialize the players
+        self._current_player = None  # Initialize the current player
+        self._initialize_players(num_players)  # Initialize the players
         self._create_and_place_peds()  # Place the peds in their starting positions
 
-        self._players = []  # Initialize the players
-        self._current_player = None  # Initialize the current player
+    def _initialize_players(self, num_players: int) -> None:
+        """Initialize the players of the game."""
+
+        for i in range(num_players):
+
+            # Create a player with the color as ordered in the player_order list.
+            # num-1 because the list is we're starting the player order from 1
+            color = list(self._gui.get_color_positions_dict().keys())[self._player_order[i]-1]
+
+            self._players.append(Player(color))
+
+        self._current_player = self._players[0]
+
+        # Showing a message that indicates the current player
+        self._show_message("Player 1's turn", PLAYER_TURNS)
+
+    def _change_player(self) -> None:
+        """Change the current player to the next one."""
+
+        # Changing the index of the current player to the next one
+        player_index = self._players.index(self._current_player)
+        next_player_index = (player_index + 1) % len(self._players)
+        self._current_player = self._players[next_player_index]
+
+        # Showing a message that indicates the next player
+        self._show_message(f"Player {next_player_index + 1}'s turn",
+                           PLAYER_TURNS)
 
     def _create_and_place_peds(self) -> None:
         """Placing the peds in their starting positions in the board."""
@@ -35,24 +77,53 @@ class ChineseCheckersGame:
         # Place the peds in their starting positions
         self._board.place_peds(peds)
 
+    def get_player_by_color(self, color: str) -> Union[Player, None]:
+        """Return the player with the given color."""
+
+        for player in self._players:
+            if player.get_color() == color:
+                return player
+
+        raise ValueError("No player with the color", color)
+
     def _create_peds(self) -> List[Ped]:
-        """Create the peds of the game."""
+        """Creating the peds of the game, and assigning them to the players."""
 
         peds = []
 
+        # Getting the colors of the players in the order they play,
+        # taking into account the number of players
+        playable_colors = self._gui.playable_colors()
+
+        # # Getting the colors of the players in the order they play,
+        # # taking into account the number of players
+        # for num in self._player_order:
+        #     playable_colors.append(list(self._gui.get_color_positions_dict().keys())[num-1])
+
         # Create the peds of the game by retrieving the positions
         # of the colored triangles from the gui.
-        for color, positions in self._gui.get_color_positions_dict().items():
-            for position in positions:
+        for color in playable_colors:
+            for position in self._gui.get_color_positions_dict()[color]:
                 new_ped = Ped(color, position)
+
+                try:
+                    # Assign the ped to the player with the same color
+                    player_by_color = self.get_player_by_color(color)
+
+                except ValueError as e:
+                    print(e)
+                    sys.exit()
+
+                player_by_color.add_ped(new_ped)
                 peds.append(new_ped)
 
         return peds
 
-    def _handle_events(self) -> None:
+    def _handle_events(self) -> Optional[str]:
         """Handle the events of the game."""
 
         for event in pygame.event.get():
+
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
@@ -72,11 +143,18 @@ class ChineseCheckersGame:
                     make_turn = self._handle_click(pos)
 
                     if make_turn:
+
+                        # Check if the any player won the game
+                        won_index = self._check_winner()
+                        if won_index is not None:
+                            print("Player won the game!")
+                            return "Player " + str(won_index) + " won the game!"
+
+                        # If no player won the game, continue the game
                         print("Player made a turn successfully.")
-                        # If a player made a turn successfully,
-                        # update the gui and exit the function
-                        # self._gui.update_ped()
-                        return
+
+                        self._change_player()  # change the player
+                        return won_index
 
                     # If a player failed to make a turn, let him try again
                     else:
@@ -85,9 +163,13 @@ class ChineseCheckersGame:
     def _handle_click(self, mouse_pos: Tuple[int, int]) -> bool:
         """Handle the click of the player."""
 
-        # Iterate through the positions of the peds in the board
-        # and check if a click was made on a ped
-        for position in self._board.get_peds_locations():
+        player_peds = self._current_player.get_peds()  # Get the peds of the current player
+
+        # Iterate through the positions of the current player's peds
+        # in the board and check if a click was made on a ped
+        for ped in player_peds:
+
+            position = ped.get_location()
             ped_x = position[X_COORD]
             ped_y = position[Y_COORD]
 
@@ -124,14 +206,14 @@ class ChineseCheckersGame:
 
         # If there was an error with the location, do nothing
         if ped is None and possible_moves is None:
-            self._show_temp_message(
-                "An error occurred. Restarting turn.")
+            self._show_message("An error occurred. Restarting turn.")
             return False
 
         # If the ped has no possible moves, prompt the player to select another ped
         elif possible_moves is None:
 
-            self._show_temp_message("This ped has no possible moves. Restarting turn.")
+            self._show_message(
+                "This ped has no possible moves. Restarting turn.")
             return False
 
         # If the ped has possible moves
@@ -151,7 +233,7 @@ class ChineseCheckersGame:
             self._gui.unhighlight_surface(self._gui.get_highlight_surface())
             pygame.mouse.set_cursor(*pygame.cursors.arrow)
             print("setting cursor to arrow")
-            self._show_temp_message("Please select a valid move. Restarting turn.")
+            self._show_message("Please select a valid move. Restarting turn.")
             return False
 
         pygame.mouse.set_cursor(*pygame.cursors.arrow)
@@ -163,7 +245,6 @@ class ChineseCheckersGame:
         self._board.move_ped(ped, new_location)
 
         return True
-
 
     def _select_ped(self, location: Tuple[float, float]) -> \
             Union[Tuple[Ped, List[Coordinates]], Tuple[None, None], Tuple[Ped, None]]:
@@ -183,7 +264,8 @@ class ChineseCheckersGame:
 
         # Bring the possible moves of the selected ped from the board
         print("getting possible moves")
-        possible_moves = self._board.find_valid_moves(ped.get_location()    )
+        possible_moves = self._board.find_valid_moves(ped.get_location())
+
         # If there are no possible moves, prompt the player to select another ped
         # and do nothing
         if not possible_moves:
@@ -231,16 +313,51 @@ class ChineseCheckersGame:
         # if the player made invalid move, return None
         return None
 
-    def _show_temp_message(self, message: str) -> None:
+    def _show_message(self, message: str, purpose: int = 0) -> None:
         """Show a temporary message on the screen."""
 
-        self._gui.show_message(message)
+        self._gui.show_message(message, purpose)
 
-        # Wait for a short time before clearing the message
-        pygame.time.delay(1800)  # 1.8 seconds
+        if purpose == 0:
+            # Wait for a short time before clearing the message
+            pygame.time.delay(1800)  # 1.8 seconds
 
-        # Clear the message from the screen
-        self._gui.clear_message()
+            # Clear the message from the screen
+            self._gui.clear_message()
+
+    def _check_winner(self) -> Optional[int]:
+        """Check if the game has a winner."""
+
+        for i in range(len(self._players)):
+
+            # Check if all the peds of the player are in the home of the opponent
+            if all(self._is_opposite_home(i + 1, ped.get_location())
+                   for ped in self._players[i].get_peds()):
+
+                return i+1
+
+        return None
+
+    def _is_opposite_home(self, player_index: int,
+                          location: Coordinates) -> bool:
+        """Check if the ped in the given location (assuming there is
+        a ped there) is in the home of the opposite corner."""
+
+        player_index_by_order = self._player_order[player_index-1]
+
+        # there is 3 (len(PLAYER_ORDER[0]) / 2) because the number of
+        # triangles in a hexagram is always 6, and the opposite
+        # triangle is 3 places to step from the current.
+        opposite_index = player_index_by_order - len(PLAYER_ORDER[0]) // 2  # 3
+        if opposite_index <= 0:
+            opposite_index += 6
+
+        # find the matching color home locations
+        home_locations = list(self._gui.get_color_positions_dict().values())[opposite_index]
+
+        # if the given location is in the matching color home, return true,
+        # otherwise false.
+        return location in home_locations
 
     def run(self):
 
@@ -249,17 +366,49 @@ class ChineseCheckersGame:
         # Creating a clock object to control the frame rate
         clock = pygame.time.Clock()
 
-        while True:
+        winner = None
 
-            self._handle_events()  # Handle the events
+        # The main loop of the game
+        while winner is None:
 
             pygame.display.flip()  # Update the display
 
             clock.tick(60)  # 60 frames per second
 
+            winner = self._handle_events()  # Handle the events
+
+        self._show_message(f"Player {winner} wins!")  # Show the winner message
+
 
 if __name__ == "__main__":
 
-    game = ChineseCheckersGame(6)  # Creating the game object
+    try:
+        # Number of players in the game using command line arguments
+        # Assuming that what was given is legal
+        num_of_players = int(sys.argv[1])
+        possible_num_of_players = [2, 3, 4, 6]
+
+        if num_of_players not in possible_num_of_players:
+            raise ValueError
+
+    except (ValueError, IndexError):
+        print("Please enter a valid number of players [2,3,4,6].")
+        sys.exit()
+
+    try:
+        # Number of players in the game using command line arguments
+        # Assuming that what was given is legal
+        num_of_real_players = int(sys.argv[2])
+
+        if (num_of_real_players > num_of_players or
+                num_of_real_players not in (possible_num_of_players + [0])):
+            raise ValueError
+
+    except (ValueError, IndexError):
+        print("Please enter a valid number of real players, "
+              "which is expected to be within the number of players.")
+        sys.exit()
+
+    game = ChineseCheckersGame(num_of_players)  # Creating the game object
 
     game.run()  # Running the game

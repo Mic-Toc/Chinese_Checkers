@@ -38,10 +38,24 @@ Coordinates = Tuple[float, float]
 X_COORD = 0
 Y_COORD = 1
 
+PLAYER_TURNS = 1
+
+PLAYER_ORDER = [[4, 1, 3, 6, 2, 5],
+                [4, 1, 3, 6],
+                [4, 2, 6],
+                [4, 1]]
+
 
 class InitGui:
 
-    def __init__(self):
+    def __init__(self, num_players: int) -> None:
+
+        self._num_players = num_players  # Number of players
+
+        for order in PLAYER_ORDER:
+            if len(order) == num_players:
+                self._player_order = order
+                break
 
         # Initialize the game
         pygame.init()
@@ -73,9 +87,11 @@ class InitGui:
         # current state when needed
         self._previous_state = None
 
+        # determine the number of players
+
         self.create_board()  # Create the game board
 
-    def create_board(self):
+    def create_board(self) -> None:
         """Creating or updating the game board, depending on the state of the game."""
 
         # Draw the game board
@@ -92,28 +108,14 @@ class InitGui:
         pygame.draw.rect(self._screen, OUTER_COLOR,
                          (board_x0, board_y0, BOARD_WIDTH, BOARD_HEIGHT), 7)
 
-        # # Adding the label "Chinese Checkers"
-        # font = pygame.font.SysFont("Courier", 32)
-        # label_text = "Chinese Checkers"
-        #
-        # # Creating the label surface, with the text,
-        # # smooth edges and black color
-        # label_surface = font.render(label_text, True, (0, 0, 0))
-        #
-        # # Getting the rectangle of the label surface,
-        # # so that the label is centered inside of it.
-        # label_rect = label_surface.get_rect(center=(FRAME_WIDTH // 2, 30))
-        #
-        # # Placing the text label on the screen.
-        # self._screen.blit(label_surface, label_rect)
-
         # Call the method to draw the hexagram
         self._draw_hexagram()
 
         # Update the display
         pygame.display.flip()
 
-    def _draw_hexagram(self):
+    def _draw_hexagram(self) -> None:
+        """Draw the hexagram, which is the shape of the board."""
 
         cos_30 = math.cos(math.pi / 6)
         sin_30 = math.sin(math.pi / 6)
@@ -124,6 +126,12 @@ class InitGui:
         # The distance between the centers of adjacent cells in
         # the center of the board.
         self._cells_dist = 2 * self._radius_cells + 15  # 15 is the padding between the cells
+
+        # # If the number of players is 2, we need to make a place
+        # # for 15 cells in the same triangle dimensions.
+        # if self._num_players == 2:
+        #     self._radius_cells -= 1.2
+        #     self._radius_peds -= 1.2
 
         # Calculate the center of the board, to ensure that the hexagram is drawn
         # in its center.
@@ -220,6 +228,13 @@ class InitGui:
                           angle: int) -> None:
 
         rows = 4
+        cells_dist = self._cells_dist
+
+        # # If the number of players is 2, we need to draw 15 cells to
+        # # each player's side
+        # if self._num_players == 2:
+        #     rows = 5
+        #     cells_dist -= 8
 
         for i in range(rows):
 
@@ -227,14 +242,14 @@ class InitGui:
             cells_in_row = i + 1
 
             # Calculate the y coordinate of the current row
-            y = point[Y_COORD] + i * self._cells_dist + 4  # 4 is the padding between the rows
+            y = point[Y_COORD] + i * cells_dist + 4  # 4 is the padding between the rows
 
             for j in range(cells_in_row):
 
                 # Calculate the x coordinate of the current cell
                 # (We deduct from the dest to make the triangles more proportional)
                 x = (point[X_COORD] - (cells_in_row - 1) *
-                     (self._cells_dist+4) / 2 + j * (self._cells_dist+4))
+                     (cells_dist+4) / 2 + j * (cells_dist+4))
 
                 # Rotate the point
                 rotated_x, rotated_y = self._rotate_point((x, y),
@@ -302,11 +317,22 @@ class InitGui:
                 pygame.draw.circle(surface, color, (int(x), int(y)),
                                    radius_center_cells)
 
+    def playable_colors(self) -> List[str]:
+        """Return the colors of the players in the order they play."""
+        playable_colors = []
+
+        for num in self._player_order:
+            playable_colors.append(list(self._color_positions.keys())[num-1])
+        return playable_colors
+
     def _place_peds(self, surface: pygame.Surface, radius_peds: float) -> None:
         """Place the peds in the initial positions at the start of the game."""
 
-        for color, positions in self._color_positions.items():
-            for position in positions:
+        # Get the colors of the players in the order they play
+        playable_colors = self.playable_colors()
+
+        for color in playable_colors:
+            for position in self._color_positions[color]:
 
                 # Draw the ped inside the position of the cell
                 # (because its radius is smaller than the cell's one),
@@ -415,7 +441,7 @@ class InitGui:
         self._screen.blit(surface, (0, 0))
         pygame.display.flip()  # Update the display
 
-    def show_message(self, message: str) -> None:
+    def show_message(self, message: str, purpose: int = 0) -> None:
         """Showing a message to the user."""
 
         self._previous_state = self._screen.copy()
@@ -437,8 +463,14 @@ class InitGui:
         text_surface.blit(text, text_rect)
 
         # Blit the text on the surface
-        self._screen.blit(text_surface, (FRAME_WIDTH / 2 - text_rect.width / 2,
-                                         FRAME_HEIGHT / 2 - text_rect.height / 2))
+        if purpose == PLAYER_TURNS:
+            self._screen.blit(text_surface, ((FRAME_WIDTH + BOARD_WIDTH) / 2,
+                                             FRAME_HEIGHT / 4))
+        else:
+            self._screen.blit(text_surface,
+                              (FRAME_WIDTH / 2 - text_rect.width / 2,
+                               FRAME_HEIGHT / 2 - text_rect.height / 2))
+
         pygame.display.flip()  # Update the display
 
     def clear_message(self) -> None:
@@ -536,9 +568,9 @@ def test_triangle_placement():
             print(rotated_point)
 
 
-if __name__ == "__main__":
-
-    game = InitGui()  # Creating the game object
-    # test_rotation()  # Testing the rotation function
-    test_triangle_placement()  # Testing the triangle placement
-    game.run()  # Running the game
+# if __name__ == "__main__":
+#
+#     game = InitGui()  # Creating the game object
+#     # test_rotation()  # Testing the rotation function
+#     test_triangle_placement()  # Testing the triangle placement
+#     game.run()  # Running the game

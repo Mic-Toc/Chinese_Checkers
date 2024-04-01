@@ -16,27 +16,10 @@ Y_COORD = 1
 
 class Board:
 
-    def __init__(self) -> None:
-
-        # # creating a dictionary whose keys are coordinates
-        # # and values are peds or None, depending on if
-        # # the place is empty
-        # for i in range(1, 7):
-        #
-        #     for j in range(10):
-        #
-        #         coordinate: Coordinates = (i, j)
-        #
-        #         board[coordinate] = None
-        #
-        # for k in range(61):
-        #
-        #     coordinate = (0, k)
-        #
-        #     board[coordinate] = None
+    def __init__(self, num_players: int) -> None:
 
         self._peds: List[Ped] = []
-        self.gui = InitGui()
+        self.gui = InitGui(num_players)
 
         board: Dict[Coordinates, Union[Ped, None]] = dict()
 
@@ -46,87 +29,6 @@ class Board:
             board[location] = None
 
         self._board = board
-
-        # self._convert_gui_location_dict()
-
-    # def create_location_dict(self) -> Dict[int, Tuple[int, int]]:
-    #
-    #     # get the location dict from the gui object
-    #     gui_location_dict = self._gui.get_positions_dict()
-    #
-    #     # initializing the max row (the most bottom row)
-    #     # and the max column (the most east row)
-    #     max_row, max_col = -1
-    #
-
-    # def _convert_gui_location_dict(self) -> None:
-    #
-    #     # number of rows in a triangle
-    #     rows = 4
-    #
-    #     # getting the color positions dictionary from the gui object
-    #     color_positions_dict = self._gui.get_color_positions_dict()
-    #
-    #     # getting the center positions list from the gui object
-    #     center_positions_dict = self._gui.get_center_positions_list()
-    #
-    #     # Getting the distance between each cell
-    #     cells_dist = self._gui.get_cell_distance()
-    #
-    #     # initializing the max row (the most bottom row)
-    #     # and the max column (the most right row)
-    #     max_row, max_col = -1, -1
-    #
-    #     # Dictionaries are ordered, so I know in advance that the top (1)
-    #     # triangle is first, and then the order is going clockwise.
-    #     # However, I want player1 to be the bottom (4) triangle,
-    #     # and player2 to be the player in front player1 (1),
-    #     # and so on counter-clockwise.
-    #     player_order = [4, 1, 3, 6, 2, 5]
-    #
-    #     # Converting the dictionary to list, so it will be possible
-    #     # to get the color name in the order of the player_order list above
-    #     color_positions_list = list(color_positions_dict)
-    #
-    #     # print("list:", color_positions_list)
-    #     print("dict:", color_positions_dict)
-    #
-    #     player_index = 1
-    #     for num in player_order:
-    #
-    #         # getting the color name with the index num in the dictionary,
-    #         # num-1 because we're started to count from 1 in player_order
-    #         color_name = color_positions_list[num-1]
-    #
-    #         # getting the list of locations that have color_name
-    #         # as a key in the dictionary:
-    #         locations_list = color_positions_dict[color_name]
-    #
-    #         # sort the cells by y_coordinate, from top to bottom
-    #         location_list_sorted = sorted(locations_list,
-    #                                       key=lambda m: m[Y_COORD])
-    #
-    #         for i in range(rows):
-    #
-    #             if num in [1, 3, 5]:
-    #                 cells_in_row = i + 1
-    #
-    #             else:
-    #                 cells_in_row = rows - i
-    #
-    #             row_list = location_list_sorted[:cells_in_row]
-    #
-    #             # sort the cells in one row by the x_coordinate
-    #             x_sorted_row_list = sorted(row_list)
-    #
-    #             for j in range(len(x_sorted_row_list)):
-    #
-    #                 coordinate = (player_index, j)
-    #                 self._board[coordinate] = Peds(color_name,
-    #                                                coordinate,
-    #                                                j)
-    #
-    #         player_index += 1
 
     def place_peds(self, peds: List[Ped]) -> None:
         """Placing the given peds on their initial locations on the board."""
@@ -154,10 +56,10 @@ class Board:
         # Define the bounding box around the cell based on its distance from
         # other cells. We multiply by 1.1 because the placement between
         # several cells is not exact, so we need to take a larger area.
-        min_x = curr_pos[X_COORD] - cell_dist * 1.3
-        max_x = curr_pos[X_COORD] + cell_dist * 1.3
-        min_y = curr_pos[Y_COORD] - cell_dist * 1.3
-        max_y = curr_pos[Y_COORD] + cell_dist * 1.3
+        min_x = curr_pos[X_COORD] - cell_dist * 1.2
+        max_x = curr_pos[X_COORD] + cell_dist * 1.2
+        min_y = curr_pos[Y_COORD] - cell_dist * 1.2
+        max_y = curr_pos[Y_COORD] + cell_dist * 1.2
 
         def is_valid_neighbor(position: Coordinates) -> bool:
             """Return True if the given position is valid, False otherwise.
@@ -249,8 +151,8 @@ class Board:
 
                 # we need a little bit of offset because the placement
                 # is not perfect
-                offset_x = 10
-                offset_y = 10
+                offset_x = 5
+                offset_y = 5
 
                 changed = False
                 # Check if the new location with the offset is in one of the
@@ -372,8 +274,19 @@ class Board:
         self.gui.update_ped(self.gui.get_temp_surface(),
                             old_location, ped)
 
-    def get_peds_locations(self) -> List[Coordinates]:
-        """Return a list of all the locations of the peds."""
+    def get_peds_locations_by_color(self, color: str) -> List[Coordinates]:
+        """Return a list of all the locations of peds with the given color."""
+
+        locations = []
+
+        for ped in self._peds:
+            if ped.get_color() == color:
+                locations.append(ped.get_location())
+
+        return locations
+
+    def get_all_peds_locations(self) -> List[Coordinates]:
+        """Return a list of all the locations of all the peds."""
 
         locations = []
 
