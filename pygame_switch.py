@@ -1,4 +1,4 @@
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 
 import pygame
 import sys
@@ -39,6 +39,7 @@ X_COORD = 0
 Y_COORD = 1
 
 PLAYER_TURNS = 1
+ANOTHER_TURN = 2
 
 PLAYER_ORDER = [[4, 1, 3, 6, 2, 5],
                 [4, 1, 3, 6],
@@ -77,11 +78,11 @@ class InitGui:
 
         # Dictionary to store the positions of the cells in
         # outer triangles by color.
-        self._color_positions: Dict[str, List[Tuple[float, float]]] = {}
+        self._color_positions: Dict[str, List[Coordinates]] = {}
 
         # List to store the positions of the cells in
         # the center of the board.
-        self._center_positions: List[Tuple[float, float]] = []
+        self._center_positions: List[Coordinates] = []
 
         # Setting a previous state property to revert the
         # current state when needed
@@ -360,15 +361,16 @@ class InitGui:
         pygame.display.flip()
 
     def update_ped(self, surface: pygame.Surface,
-                   old_position: Coordinates, ped: Ped) -> None:
-        """Update the positions of the peds on the screen according to the
-        given positions."""
+                   old_position: Coordinates, updated_ped: Ped) -> None:
+        """Update the position of the ped on the screen according to the
+        given position."""
 
         # Clear the screen
         surface.fill((0, 0, 0, 0))
 
         removed = False
         # Remove the ped from its previous position:
+
         # if the ped was in the outer triangles
         for color, positions in self._color_positions.items():
             if old_position in positions:
@@ -385,17 +387,19 @@ class InitGui:
 
         # Draw the peds in their new positions
         try:
-            pygame.draw.circle(surface, ped.get_color(),
-                               ped.get_location(), self._radius_peds)
+            pygame.draw.circle(surface, updated_ped.get_color(),
+                               updated_ped.get_location(), self._radius_peds)
 
             # Adding a small frame around the circle
-            if ped.get_color() != "black":
+            if updated_ped.get_color() != "black":
                 pygame.draw.circle(surface, "black",
-                                   ped.get_location(), self._radius_peds, 1)
+                                   updated_ped.get_location(),
+                                   self._radius_peds, 1)
 
             else:
                 pygame.draw.circle(surface, "white",
-                                   ped.get_location(), self._radius_peds, 1)
+                                   updated_ped.get_location(),
+                                   self._radius_peds, 1)
 
         except Exception as e:
             print(e)
@@ -407,23 +411,27 @@ class InitGui:
         pygame.display.flip()
 
     def highlight_locations(self, surface: pygame.Surface,
-                            positions: List[Tuple[float, float]]) -> None:
+                            positions: List[List[Coordinates]]) -> None:
+        """Highlight the given positions on the screen."""
+
         # Store the previous surface
         self._previous_state = self._screen.copy()
 
         # Clear the previous highlights
         surface.fill((0, 0, 0, 0))
 
-        for position in positions:
-            pygame.draw.circle(surface, HIGHLIGHT_COLOR,
-                               (position[X_COORD], position[Y_COORD]),
-                               self._radius_cells, 3)
+        for move_types in positions:
+            for position in move_types:
+                pygame.draw.circle(surface, HIGHLIGHT_COLOR,
+                                   (position[X_COORD], position[Y_COORD]),
+                                   self._radius_cells, 3)
 
         # Blit the highlight surface on the temp surface
         self._screen.blit(surface, (0, 0))
         pygame.display.flip()  # Update the display
 
     def unhighlight_surface(self, surface: pygame.Surface) -> None:
+        """Unhighlight the possible moves in the given surface."""
 
         # Clear the previous highlights
         surface.fill((0, 0, 0, 0))
@@ -448,28 +456,53 @@ class InitGui:
 
         # Display the message on the screen
         font = pygame.font.SysFont("Courier", 18)
-        text = font.render(message, True, (0, 0, 0))
 
-        # Get the rectangle of the text
-        text_rect = text.get_rect(center=(FRAME_WIDTH / 2, FRAME_HEIGHT / 2))
+        # Split the message into lines, can be too long
+        whole_text = []
+        for elem in message.split("\n"):
+            whole_text.append(font.render(elem, True, (0, 0, 0)))
 
-        # Create a surface to display the text on
-        text_surface = pygame.Surface((text_rect.width + 5,
-                                      text_rect.height + 5))
+        # get the whole text height and width
+
+        # Getting the maximum width, to be used as the width of the surface
+        text_width = max(text.get_width() for text in whole_text)
+
+        # Getting the sum of the line heights, to be used as the height
+        # of the surface
+        text_height = sum(text.get_height() for text in whole_text)
+
+        # Create a surface to display the text on, add a small margin
+        text_surface = pygame.Surface((text_width + 5, text_height + 5))
         text_surface.fill((255, 255, 255))  # Fill the surface with white
 
-        # Blit the text on the surface
-        text_rect.center = text_surface.get_rect().center
-        text_surface.blit(text, text_rect)
+        y_offset = 0
+        for line in whole_text:
 
-        # Blit the text on the surface
+            # Draw the text on the surface, horizontally centered
+            text_surface.blit(line, (
+                text_surface.get_width() / 2 - line.get_width() / 2, y_offset))
+
+            # Update the y_offset, to draw the next line below the current one
+            y_offset += line.get_height()
+            print("line_height: " + str(line.get_height()))
+
+        # Blit the surface on the screen
         if purpose == PLAYER_TURNS:
+
             self._screen.blit(text_surface, ((FRAME_WIDTH + BOARD_WIDTH) / 2,
                                              FRAME_HEIGHT / 4))
+
+        # elif purpose == ANOTHER_TURN:
+        #
+        #     self._screen.blit(text_surface,
+        #                       (FRAME_WIDTH / 2 - text_surface.get_width() / 2,
+        #                        FRAME_HEIGHT / 2 - text_surface.get_height() / 2))
+
         else:
+
             self._screen.blit(text_surface,
-                              (FRAME_WIDTH / 2 - text_rect.width / 2,
-                               FRAME_HEIGHT / 2 - text_rect.height / 2))
+                              (FRAME_WIDTH / 2 - text_surface.get_width() / 2,
+                               FRAME_HEIGHT / 2 - text_surface.get_height() / 2))
 
         pygame.display.flip()  # Update the display
 
@@ -482,8 +515,41 @@ class InitGui:
             pygame.display.flip()  # Update the display
             self._previous_state = None  # Reset the previous state
 
-    # def update(self, positions: List[Tuple[float, float]]) -> None:
-    #     """Update the screen with the new positions."""
+    def is_in_opposite_home(self, ped: Ped) -> bool:
+        """Check if the given ped is in the home of
+         his matching opposite corner."""
+
+        ped_color = ped.get_color()
+        home_index = list(self._color_positions.keys()).index(ped_color) + 1
+        # color_index_by_order = self._player_order[color_index - 1]
+
+        # there is 3 (len(PLAYER_ORDER[0]) / 2) because the number of
+        # triangles in a hexagram is always 6, and the opposite
+        # triangle is 3 places to step from the current.
+        # print("home_index: ", home_index)
+        opposite_index = home_index - len(PLAYER_ORDER[0]) // 2  # 3
+        if opposite_index <= 0:
+            opposite_index += 6
+
+        # find the matching opposite home locations
+        opposite_home_locations = list(self._color_positions.values())[opposite_index-1]
+        # print("opposite_home_color: ", opposite_home_locations)
+
+        # if the location of the given ped is in the matching opposite home,
+        # return true, otherwise false.
+        return ped.get_location() in opposite_home_locations
+
+
+
+    def color_of_opposite_home(self, location: Coordinates) -> Optional[str]:
+        """Return the color of the foreign home if the given location is in it,
+        None otherwise."""
+
+        for color, positions in self._color_positions.items():
+            if location in positions:
+                return color
+
+        return None
 
     def get_color_positions_dict(self):
         return self._color_positions

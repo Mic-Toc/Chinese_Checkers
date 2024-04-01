@@ -89,51 +89,67 @@ class Board:
             if pos != curr_pos and is_valid_neighbor(pos):
                 neighbors.append(pos)
 
-        # print("pos: ", curr_pos, "neighbors:", neighbors)
+        # print("pos: ", curr_pos, "neighbors: ", neighbors)
         return neighbors
 
     def _is_valid_move(self, curr_location: Coordinates,
-                       end_location: Coordinates) -> bool:
+                       end_location: Coordinates) -> Tuple[bool, bool]:
         """Return True if the move is valid, False otherwise.
+        In addition, return True if the move was a hop.
         Assumes that the new location is one of the locations
         of the dictionary or list from the gui."""
+
+        curr_ped = self._board[curr_location]
+        in_opposite_home = self.gui.is_in_opposite_home(curr_ped)
+
+        # if the ped is in the foreign home, moving out of it is invalid
+        if in_opposite_home:
+            opposite_color = self.gui.color_of_opposite_home(curr_location)
+            print("In the home of: ", opposite_color)
+            # Means that the ped is not in any foreign home
+            # (although we checked that it is in a foreign home)
+            if opposite_color is None:
+                print("There is a problem.")  # Not supposed to happen (check)
+                pass
+
+            elif (end_location not in
+                    self.gui.get_color_positions_dict()[opposite_color]):
+                print("end_location:" + str(end_location), "dict:" + str(self.gui.get_color_positions_dict()[opposite_color]))
+                return False, False
 
         # if the new location is occupied by another ped,
         # the move is invalid
         if self._board[end_location] is not None:
-            return False
+            return False, False
 
         # if the new location is in the list of neighbors of the current
         # location, the move is valid
         if end_location in self._find_neighbors(curr_location):
-            print("end_location:", end_location)
-            return True
+            # print("end_location:", end_location)
+            return True, False
 
         # else, we need to check if we can hop over another ped/s
         # to the new location
         else:
-            return self._can_hop_over(curr_location, end_location)
+
+            is_hop = self._can_hop_over(curr_location, end_location)
+            return is_hop, is_hop
 
     def _can_hop_over(self, curr_location: Coordinates,
                       end_location: Coordinates,
-                      count=100) -> bool:
-        """A function that checks recursively if we can get from
+                      ) -> bool:
+        """A function that checks if we can get from
         the current location to the new one using a single hop.
         Assumes that the new location is one of the locations
-        of the dictionary or list from the gui.
-        Max hops is 100."""
-
-        if count == 0:
-            return False
-
+        of the dictionary or list from the gui."""
         changed = False
         new_location = None
 
         # If the current location is the same as the end location,
         # we can hop over one time to it
-        print("Came to here!")
+        # print("Came to here!")
         if curr_location == end_location:
-            print("success!")
+            # print("success!")
             return True
 
         # Iterate through the neighbors of the current location and
@@ -143,7 +159,7 @@ class Board:
             # if the neighbor is not visited and is occupied by a ped,
             # meaning we can possibly hop over it
             if self._board[neighbor] is not None:
-                print("neighbor:", neighbor)    # debug
+                # print("neighbor:", neighbor)    # debug
                 # Calculate the new location after hopping over the ped
                 new_x = 2 * neighbor[X_COORD] - curr_location[X_COORD]
                 new_y = 2 * neighbor[Y_COORD] - curr_location[Y_COORD]
@@ -167,11 +183,11 @@ class Board:
 
                 if not changed:
                     for pos in self.gui.get_center_positions_list():
-                        if pos == (532.2, 172.6):   # debug
-                            print("pos:", pos, "\nnew_x-offset_x:", new_x - offset_x,
-                                  "new_x+offset_x:", new_x + offset_x)
-                            print("new_y-offset_y:", new_y - offset_y,
-                                  "new_y+offset_y:", new_y + offset_y)
+                        # if pos == (532.2, 172.6):   # debug
+                            # print("pos:", pos, "\nnew_x-offset_x:", new_x - offset_x,
+                            #       "new_x+offset_x:", new_x + offset_x)
+                            # print("new_y-offset_y:", new_y - offset_y,
+                            #       "new_y+offset_y:", new_y + offset_y)
                         if (new_x - offset_x <= pos[X_COORD] <= new_x + offset_x and
                                 new_y - offset_y <= pos[Y_COORD] <= new_y + offset_y and
                                 self._board[pos] is None):
@@ -186,20 +202,21 @@ class Board:
 
         # If we couldn't hop over any single ped to the new location,
         # the move is invalid
-        if not changed:
+        if not changed or new_location != end_location:
             return False
 
-        else:  # we can hop over the ped,
-            return self._can_hop_over(new_location, end_location, count - 1)
+        return True  # we can hop over to the given location
 
-    def find_valid_moves(self, curr_pos: Coordinates,
-                         ) -> List[Coordinates]:
+        # else:  # we can hop over the ped, check if we can hop over another ped
+        #     return self._can_hop_over(new_location, end_location, count - 1)
+
+    def find_valid_moves(self, curr_pos: Coordinates) -> List[List[Coordinates]]:
         """Return a list of valid moves for the given ped."""
 
         print("Finding valid moves for", curr_pos)
         valid_moves = []
-
-        # visited.add(curr_pos)
+        neighbor_moves = []
+        hop_moves = []
 
         # Get all the positions of the board
         all_positions = self.get_all_positions()
@@ -212,9 +229,14 @@ class Board:
                 continue
 
             # if the move is valid, add it to the list of valid moves
-            is_valid = self._is_valid_move(curr_pos, position)
-            if is_valid:
-                valid_moves.append(position)
+            is_valid, is_hop = self._is_valid_move(curr_pos, position)
+            if is_valid and not is_hop:
+                neighbor_moves.append(position)
+            elif is_valid and is_hop:
+                hop_moves.append(position)
+
+        valid_moves.append(neighbor_moves)
+        valid_moves.append(hop_moves)
 
         return valid_moves
 
@@ -271,8 +293,7 @@ class Board:
         self._board[new_location] = ped
 
         # update the gui
-        self.gui.update_ped(self.gui.get_temp_surface(),
-                            old_location, ped)
+        self.gui.update_ped(self.gui.get_temp_surface(), old_location, ped)
 
     def get_peds_locations_by_color(self, color: str) -> List[Coordinates]:
         """Return a list of all the locations of peds with the given color."""
