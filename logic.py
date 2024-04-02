@@ -1,3 +1,5 @@
+import logging
+import datetime
 import sys
 from typing import Tuple, List, Union, Optional, Set
 
@@ -28,7 +30,7 @@ PLAYER_ORDER = [[4, 1, 3, 6, 2, 5],
 
 class ChineseCheckersGame:
 
-    def __init__(self, num_players: int) -> None:
+    def __init__(self, num_players: int, num_real_players: int) -> None:
 
         self._board = Board(num_players)  # Initialize the board
 
@@ -41,10 +43,17 @@ class ChineseCheckersGame:
 
         self._players: List[Player] = []  # Initialize the players
         self._current_player = None  # Initialize the current player
-        self._initialize_players(num_players)  # Initialize the players
+        self._initialize_players(num_players, num_real_players)  # Initialize the players
         self._create_and_place_peds()  # Place the peds in their starting positions
 
-    def _initialize_players(self, num_players: int) -> None:
+        # Initializing the log file.
+        # the format is the date and time of the log, the name of the logger,
+        # and the message.
+        logging.basicConfig(filename='game.log',
+                            level=logging.INFO,
+                            format='%(asctime)s - %(name)s - %(message)s')
+
+    def _initialize_players(self, num_players: int, num_real_players: int) -> None:
         """Initialize the players of the game."""
 
         for i in range(num_players):
@@ -142,12 +151,19 @@ class ChineseCheckersGame:
                     print("Mouse position: ", pos)
 
                     # handle the click
+                    # stating the time of the turn, to be used in the log file
+                    start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    logging.info(f"Player {self._players.index(self._current_player) + 1} "
+                                 f"started his turn at {start_time}")
                     # True if a player made a turn successfully,
                     # False otherwise
                     make_turn, locations = self._handle_click(pos)
 
                     if make_turn:
 
+                        # # log the move of the player
+                        # logging.info(f"Player {self._players.index(self._current_player) + 1} "
+                        #              f"moved from {locations[0]} to {locations[1]}")
                         # Check if the any player won the game
                         won_index = self._check_winner()
                         if won_index is not None:
@@ -168,19 +184,23 @@ class ChineseCheckersGame:
                             visited.add(old_location)
 
                             # Check if the player can make another turn/s
-                            new_location = self._check_another_turn(visited,
-                                                                    current_location)
+                            new_location = self._check_another_turn(
+                                visited, current_location)
 
                             while new_location is not None:
 
                                 # Updating the locations
                                 old_location = current_location
                                 current_location = new_location
-                                visited.add(current_location)
+                                visited.add(old_location)
 
                                 print("Player can make another turn.")
                                 new_location = self._check_another_turn(
                                     visited, current_location)
+
+                                # # for any case, unhighlight leftovers
+                                # self._gui.unhighlight_surface(
+                                #     self._gui.get_highlight_surface())
 
                         self._change_player()  # change the player
                         return won_index
@@ -193,8 +213,8 @@ class ChineseCheckersGame:
             Tuple[bool, Optional[Tuple[Coordinates, Coordinates]]]:
         """Handle the click of the player.
         Returns True if the player made a turn successfully, False otherwise.
-        In addition, returns the new location if the player made a hop,
-        None otherwise."""
+        In addition, returns the old and new locations if the player
+        made a hop, None otherwise."""
 
         # Get the peds of the current player
         player_peds = self._current_player.get_peds()
@@ -212,7 +232,7 @@ class ChineseCheckersGame:
                     (ped_y - PED_RADIUS) <= mouse_pos[Y_COORD] <= (ped_y + PED_RADIUS)):
 
                 # if we're here, it means that we are in a turn state
-                is_moved, new_location = self._turn((ped_x, ped_y))
+                is_moved, new_location = self._turn(ped)
 
                 # Update the display
                 pygame.display.flip()
@@ -234,26 +254,21 @@ class ChineseCheckersGame:
         # If the click was not made on a ped, return False
         return False, None
 
-    def _turn(self, ped_location: Coordinates) -> \
-            Tuple[bool, Optional[Coordinates]]:
+    def _turn(self, ped: Ped) -> Tuple[bool, Optional[Coordinates]]:
         """Handle the turn of the current player.
         Return True if the turn was successful, False otherwise.
         In addition, return the new location if the player made a hop move,
         None otherwise."""
 
-        # select the ped and his possible moves
-        ped, possible_moves = self._select_ped(ped_location)
+        # Bring the possible moves of the selected ped from the board
+        print("getting possible moves")
+        possible_moves = self._board.find_valid_moves(ped.get_location())
 
-        # If there was an error with the location, do nothing
-        if ped is None and possible_moves is None:
+        # If there are no possible moves, prompt the player to select
+        # another ped and do nothing
+        if (possible_moves[NEIGHBOR_MOVES] == [] and
+                possible_moves[HOP_MOVES] == []):
             self._show_message("An error occurred. Restarting turn.")
-            return False, None
-
-        # If the ped has no possible moves, prompt the player to select another ped
-        elif possible_moves is None:
-
-            self._show_message(
-                "This ped has no possible moves. Restarting turn.")
             return False, None
 
         # If the ped has possible moves, change the cursor
@@ -320,7 +335,6 @@ class ChineseCheckersGame:
             if loc in visited:
                 possible_moves[HOP_MOVES].remove(loc)
 
-
         # If there are no possible moves, or the possible moves are only
         # neighbor moves, do nothing
         if not possible_moves[HOP_MOVES]:
@@ -332,6 +346,9 @@ class ChineseCheckersGame:
         # Making it that only hop moves are possible
         hop_moves_only = [possible_moves[HOP_MOVES]]
 
+        # If the ped has possible moves, change the cursor
+        pygame.mouse.set_cursor(*pygame.cursors.broken_x)
+
         # Highlight the possible moves (guaranteed to exist)
         self._gui.highlight_locations(self._gui.get_highlight_surface(),
                                       hop_moves_only)
@@ -342,11 +359,11 @@ class ChineseCheckersGame:
                            f"turn.", ANOTHER_TURN)
 
         # wait for a move
-        curr_location = self._wait_for_move(possible_moves)
+        new_location = self._wait_for_move(possible_moves)  # to fix
 
         # If the player clicked on something other than a possible move,
         # in means that the player wants to finish the turn
-        if curr_location is None:
+        if new_location is None:
 
             self._gui.unhighlight_surface(self._gui.get_highlight_surface())
             pygame.mouse.set_cursor(*pygame.cursors.arrow)
@@ -360,31 +377,18 @@ class ChineseCheckersGame:
 
         try:
             # Move the ped to the selected location
-            self._board.move_ped(ped, curr_location)
+            self._board.move_ped(ped, new_location)
 
         except Exception as e:
             print("Error: ", e)
             sys.exit()
 
-        return curr_location
+        return new_location
 
-    def _select_ped(self, location: Tuple[float, float]) -> \
-            Union[Tuple[Ped, List[List[Coordinates]]],
-                  Tuple[None, None], Tuple[Ped, None]]:
-        """Select a ped that its location is give, if exists,
-        and highlight its possible moves.
+    def _select_ped(self, ped: Ped) -> Optional[List[List[Coordinates]]]:
+        """Select the given ped and highlight its possible moves.
         Then, wait for the player to make a move.
-        Returns the ped and its possible moves if the ped exists."""
-
-        print("selecting ped at location: ", location)
-        try:
-            # Get the ped object from the board
-            ped = self._board.get_ped_by_location(location)
-
-        # If the location is not in the board, do nothing
-        except Exception as e:
-            print("Error: ", e)
-            sys.exit()
+        Returns the ped's possible moves."""
 
         # Bring the possible moves of the selected ped from the board
         print("getting possible moves")
@@ -394,12 +398,12 @@ class ChineseCheckersGame:
         # and do nothing
         if (possible_moves[NEIGHBOR_MOVES] == [] and
                 possible_moves[HOP_MOVES] == []):
-            return ped, None
+            return None
 
-        return ped, possible_moves
+        return possible_moves
 
     @staticmethod
-    def _wait_for_move(possible_moves: List[List[Coordinates]]) -> Union[Coordinates, None]:
+    def _wait_for_move(possible_moves: List[List[Coordinates]]) -> Optional[Coordinates]:
         """Wait for the player to make a move from the given possible moves.
         Returns the location of the move if it was made, None otherwise. """
 
@@ -520,7 +524,8 @@ if __name__ == "__main__":
               "which is expected to be within the number of players.")
         sys.exit()
 
-    game = ChineseCheckersGame(num_of_players)  # Creating the game object
+    # Creating the game object
+    game = ChineseCheckersGame(num_of_players, num_of_real_players)
     # game._show_message(
     #     f"Player {game._players.index(game._current_player) + 1} "
     #     f"can make another turn! \nPlease select a move to "

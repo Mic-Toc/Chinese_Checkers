@@ -86,7 +86,8 @@ class InitGui:
 
         # Setting a previous state property to revert the
         # current state when needed
-        self._previous_state = None
+        self._previous_state_highlight = None
+        self._previous_state_message = None
 
         # determine the number of players
 
@@ -415,7 +416,7 @@ class InitGui:
         """Highlight the given positions on the screen."""
 
         # Store the previous surface
-        self._previous_state = self._screen.copy()
+        self._previous_state_highlight = self._screen.copy()
 
         # Clear the previous highlights
         surface.fill((0, 0, 0, 0))
@@ -429,10 +430,11 @@ class InitGui:
         # Blit the highlight surface on the temp surface
         self._screen.blit(surface, (0, 0))
         pygame.display.flip()  # Update the display
+        print("state: " + str(self._previous_state_highlight))
 
     def unhighlight_surface(self, surface: pygame.Surface) -> None:
         """Unhighlight the possible moves in the given surface."""
-
+        print("state 2: " + str(self._previous_state_highlight))
         # Clear the previous highlights
         surface.fill((0, 0, 0, 0))
 
@@ -440,19 +442,17 @@ class InitGui:
         # self._temp_surface.blit(surface, (0, 0))
 
         # Restore the previous state, if needed
-        if self._previous_state is not None:
-            self._screen.blit(self._previous_state, (0, 0))
+        if self._previous_state_highlight is not None:
+            self._screen.blit(self._previous_state_highlight, (0, 0))
             pygame.display.flip()  # Update the display
-            self._previous_state = None  # Reset the previous state
+            self._previous_state_highlight = None  # Reset the previous state
 
-        # Blit the highlight surface on the main surface
-        self._screen.blit(surface, (0, 0))
         pygame.display.flip()  # Update the display
 
     def show_message(self, message: str, purpose: int = 0) -> None:
         """Showing a message to the user."""
 
-        self._previous_state = self._screen.copy()
+        self._previous_state_message = self._screen.copy()
 
         # Display the message on the screen
         font = pygame.font.SysFont("Courier", 18)
@@ -510,10 +510,10 @@ class InitGui:
         """Clearing the message from the screen."""
 
         # Restore the previous state, if needed
-        if self._previous_state is not None:
-            self._screen.blit(self._previous_state, (0, 0))
+        if self._previous_state_message is not None:
+            self._screen.blit(self._previous_state_message, (0, 0))
             pygame.display.flip()  # Update the display
-            self._previous_state = None  # Reset the previous state
+            self._previous_state_message = None  # Reset the previous state
 
     def is_in_opposite_home(self, ped: Ped) -> bool:
         """Check if the given ped is in the home of
