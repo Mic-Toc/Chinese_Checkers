@@ -32,7 +32,6 @@ class GameOrLoad:
                     self._play()
 
                 except SystemExit or KeyboardInterrupt or pygame.error or EOFError:
-                    print("Goodbye!")
                     pygame.quit()
                     continue
 
@@ -52,7 +51,6 @@ class GameOrLoad:
                     except (SystemExit or KeyboardInterrupt or
                             pygame.error or EOFError):
 
-                        print("Goodbye!")
                         pygame.quit()
                         continue
 
@@ -102,20 +100,18 @@ class GameOrLoad:
             self._game.run()
 
         except SystemExit or KeyboardInterrupt or pygame.error or EOFError as e:
-            print("Goodbye!")
             self._history.append(self._game)
             raise e
 
         # Saving the game to the history
         self._history.append(self._game)
-        print("Game saved to history.")
 
     def _load(self) -> None:
         """Main function to load games."""
 
         if not self._history:
             print("No games to load.")
-            sys.exit()
+            return
 
         for i in range(len(self._history)):
             print(f"{i + 1}: {self._history[i].log_file_name}")
@@ -139,7 +135,6 @@ class GameOrLoad:
             self._history[choice - 1].view_game()
 
         except SystemExit or KeyboardInterrupt or pygame.error or EOFError as e:
-            print("Goodbye!")
             raise e
 
 

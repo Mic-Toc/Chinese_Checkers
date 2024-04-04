@@ -178,8 +178,7 @@ class ChineseCheckersGame:
 
             if event.type == pygame.QUIT:
                 raise SystemExit
-                # pygame.quit()
-                # sys.exit()
+
 
             elif (event.type == pygame.MOUSEBUTTONDOWN or
                   self._is_bot(self._current_player) == "Bot"):
@@ -193,7 +192,6 @@ class ChineseCheckersGame:
 
         # Get the position of the mouse
         pos = pygame.mouse.get_pos()
-        print("Mouse position: ", pos)
 
         # log the start of the turn
         self._log_game_data(
@@ -224,17 +222,14 @@ class ChineseCheckersGame:
             # Check if the any player won the game
             won_index = self._check_winner()
             if won_index is not None:
-                print("Human won the game!")
                 return f"{self._is_bot(self._current_player)} " \
                        + str(won_index) + " won the game!"
 
             # If no player won the game, continue the game
-            print("Human made a turn successfully.")
 
             # If the player made a hop, let him do another turn
             # from the new location, if possible
             if is_hop:
-                print("locations: ", locations)
                 old_location, current_location = locations
 
                 # Create a set of the visited locations
@@ -261,10 +256,6 @@ class ChineseCheckersGame:
 
                     new_hop_location = self._check_another_turn(
                         visited, current_location)
-
-                    # # for any case, unhighlight leftovers
-                    # self._gui.unhighlight_surface(
-                    #     self._gui.get_highlight_surface())
 
             self._change_player()  # change the player
             return won_index
@@ -353,7 +344,6 @@ class ChineseCheckersGame:
         False otherwise."""
 
         # Bring the possible moves of the selected ped from the board
-        print("getting possible moves")
         possible_moves = self._board.find_valid_moves(ped.get_location())
 
         # If there are no possible moves, prompt the player to select
@@ -385,7 +375,6 @@ class ChineseCheckersGame:
 
             self._gui.unhighlight_surface(self._gui.get_highlight_surface())
             pygame.mouse.set_cursor(*pygame.cursors.arrow)
-            # print("setting cursor to arrow")
             self._show_message("Please select a valid move. Restarting turn.")
 
             # If the click was not made on a ped, log that the player
@@ -438,7 +427,6 @@ class ChineseCheckersGame:
 
         # Bring the possible moves of the selected ped from the board
         possible_moves = self._board.find_valid_moves(ped.get_location())
-        print("possible moves: ", possible_moves)
         for loc in possible_moves[HOP_MOVES]:
             if loc in visited:
                 possible_moves[HOP_MOVES].remove(loc)
@@ -470,6 +458,7 @@ class ChineseCheckersGame:
 
         if self._is_bot(self._current_player) == "Bot":
             new_location = random.choice(possible_moves[HOP_MOVES])
+
         else:
             # wait for a move
             new_location = self._wait_for_move(hop_moves_only)
@@ -664,6 +653,7 @@ class ChineseCheckersGame:
             # Do it again and again and again until the user decides to exit.
             view_state = True
             while view_state:
+
                 # Ask the user for input
                 move_number = input(f"Enter move number to view board state: "
                                     f"1 - {len(moves)}\n")
@@ -764,8 +754,8 @@ class ChineseCheckersGame:
                 pygame.time.delay(1000)  # Delay for 1 second before the next move
 
             except SystemExit or KeyboardInterrupt or pygame.error or EOFError as e:
-                print("The game has been closed.")
-                # If the user closes the window, ask him if he wants to save the game
+
+                # If the user closes the window, end the game
                 raise e
 
         if winner is not None:

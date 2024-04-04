@@ -132,7 +132,6 @@ class GameHistory:
         moves = self.get_all_moves_from_file()
 
         for move in moves:
-            print(move[FROM], move[TO])
             self._board.move_ped(self._board.get_ped_by_location(move[FROM]), move[TO])
 
         pygame.mouse.set_cursor(*pygame.cursors.arrow)  # Set the cursor to an arrow

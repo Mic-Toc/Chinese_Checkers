@@ -73,7 +73,6 @@ class Board:
             if pos != curr_pos and is_valid_neighbor(pos):
                 neighbors.append(pos)
 
-        # print("pos: ", curr_pos, "neighbors: ", neighbors)
         return neighbors
 
     def _is_valid_move(self, curr_location: Coordinates,
@@ -89,9 +88,7 @@ class Board:
         # if the ped is in the foreign home, moving out of it is invalid
         if in_opposite_home:
             opposite_color = self.gui.color_of_opposite_home(curr_location)
-            # print("In the home of: ", opposite_color)
-            # Means that the ped is not in any foreign home
-            # (although we checked that it is in a foreign home)
+
             if opposite_color is None:
                 print("There is a problem.")  # Not supposed to happen (check)
                 pass
@@ -175,7 +172,6 @@ class Board:
     def find_valid_moves(self, curr_pos: Coordinates) -> List[List[Coordinates]]:
         """Return a list of valid moves for the given ped."""
 
-        print("Finding valid moves for", curr_pos)
         valid_moves = []
         neighbor_moves = []
         hop_moves = []
@@ -188,7 +184,6 @@ class Board:
 
             # skip the current position
             if position == curr_pos:
-                print("position is the same as curr_pos: " + str(position))
                 continue
 
             # if the move is valid, add it to the list of valid moves
@@ -234,7 +229,6 @@ class Board:
         if location in self._board.keys() and self._board[location] is not None:
             return self._board[location]
 
-        print(location in self._board.keys(), self._board[location] is not None)
         raise KeyError("No ped found at this location")
 
     def move_ped(self, ped: Ped, new_location: Coordinates) -> None:

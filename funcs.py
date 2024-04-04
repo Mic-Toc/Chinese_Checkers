@@ -105,12 +105,9 @@ def parse_data_from_file(log_file: str) -> \
                                 action = "{} moved from: {} , to: {}".format(
                                     data['player'], data['from'], data['to'])
 
-                                print(type(data['from']))
                                 # Converting the string to tuple
                                 data['from'] = eval(data['from'])
                                 data['to'] = eval(data['to'])
-
-                                print(type(data['from']))
 
                                 # Appending the move to the moves list
                                 move = (data['from'], data['to'])

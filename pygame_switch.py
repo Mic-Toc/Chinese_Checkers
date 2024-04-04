@@ -346,10 +346,6 @@ class InitGui:
                 x = (center_x - (cells_in_row - 1) * self._cells_dist / 2 +
                      j * self._cells_dist)
 
-                # if j < cells_in_row // 2:
-                #     x = (center_x - (cells_in_row - 1) * self._cells_dist / 2 +
-                #          j * self._cells_dist - 4)
-
                 # Appending the coordinates to the list of center positions
                 self._center_positions.append((x, y))
 
@@ -551,19 +547,16 @@ class InitGui:
 
         ped_color = ped.get_color()
         home_index = list(self._color_positions.keys()).index(ped_color) + 1
-        # color_index_by_order = self._player_order[color_index - 1]
 
         # there is 3 (len(PLAYER_ORDER[0]) / 2) because the number of
         # triangles in a hexagram is always 6, and the opposite
         # triangle is 3 places to step from the current.
-        # print("home_index: ", home_index)
         opposite_index = home_index - len(PLAYER_ORDER[0]) // 2  # 3
         if opposite_index <= 0:
             opposite_index += 6
 
         # find the matching opposite home locations
         opposite_home_locations = list(self._color_positions.values())[opposite_index-1]
-        # print("opposite_home_color: ", opposite_home_locations)
 
         # if the location of the given ped is in the matching opposite home,
         # return true, otherwise false.
@@ -593,8 +586,6 @@ class InitGui:
                 self._screen.fill((0, 0, 0))
 
             except pygame.error:
-                print("The display surface has been quit. "
-                      "Recreating the display surface.")
 
                 # Recreate the display surface
                 self._screen = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
