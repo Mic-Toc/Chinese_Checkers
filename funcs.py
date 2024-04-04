@@ -1,5 +1,10 @@
+import json
 import re
+from typing import List, Tuple, Optional
+
 import webcolors
+
+Coordinates = Tuple[float, float]
 
 
 def convert_to_rgb(color):
@@ -52,6 +57,7 @@ def rgba_to_name(color):
     # rgba format, depending on the exception raised above.
     return str(color)
 
+
 def make_transparent(color, alpha):
     """Make a color transparent by adding an alpha channel."""
 
@@ -65,3 +71,61 @@ def make_transparent(color, alpha):
 
     # If the color is not listed above, return default color
     return make_transparent(convert_to_rgb("#CDAA7D"), alpha)
+
+
+def parse_data_from_file(log_file: str) -> \
+        Tuple[List[str], List[Tuple[Coordinates, Coordinates]], Optional[bool]]:
+    """Parse the board state from the file.
+    Returns a list of tuples representing moves, each tuple contains
+    start and end coordinates of the move."""
+
+    actions = []
+    winner = None
+    moves = []
+
+    with open(log_file, "r") as f:
+
+        for line in f:
+
+            # Splitting the line into parts
+            parts = line.strip().split(":", 2)
+
+            # Checking if everything is as expected in the file
+            if len(parts) == 3 and parts[0] == 'INFO' and parts[1].startswith('root'):
+                try:
+                    data_list = json.loads(parts[2])
+
+                    # Checking if everything is valid with the file
+                    if len(data_list) == 2 and isinstance(data_list[1], dict):
+                        move_format, data = data_list
+
+                        # if there is a move in the data, append it to the moves list
+                        if 'player' in data and 'from' in data and 'to' in data:
+                            if data['from'] != "N/A" and data['to'] != "N/A":
+                                action = "{} moved from: {} , to: {}".format(
+                                    data['player'], data['from'], data['to'])
+
+                                print(type(data['from']))
+                                # Converting the string to tuple
+                                data['from'] = eval(data['from'])
+                                data['to'] = eval(data['to'])
+
+                                print(type(data['from']))
+
+                                # Appending the move to the moves list
+                                move = (data['from'], data['to'])
+                                moves.append(move)
+
+                            elif 'message' in data and data['message'] != "N/A":
+                                action = "{}: {}".format(data['player'], data['message'])
+
+                                if "Won the game!" in data['message']:
+                                    winner = True
+
+                            # Appending the action to the actions list
+                            actions.append(action)
+
+                except json.JSONDecodeError:
+                    print("Invalid log message format:", line)
+
+    return actions, moves, winner

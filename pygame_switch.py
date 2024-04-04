@@ -1,8 +1,8 @@
 from typing import Tuple, List, Dict, Optional
 
 import pygame
-import sys
 import math
+
 import funcs
 
 from ped import Ped
@@ -29,7 +29,8 @@ rgb_colors = list(map(lambda x: funcs.convert_to_rgb(x), COLORS))
 # x[3] is the alpha channel).
 # If the color has an alpha channel, it's set to 0.7 times the alpha channel value
 # If the color has no alpha channel, it's set to 180 (the default is 255).
-TRANSPARENT_COLORS = list(map(lambda x: (*x[:3], (180 if len(x) == 3 else 0.7 * x[3])), rgb_colors))
+TRANSPARENT_COLORS = list(map(lambda x: (*x[:3], (180 if len(x) == 3 else 0.7 * x[3])),
+                              rgb_colors))
 
 HIGHLIGHT_COLOR = (255, 212, 78)  # Yellow  # 101
 
@@ -46,17 +47,16 @@ PLAYER_ORDER = [[4, 1, 3, 6, 2, 5],
                 [4, 2, 6],
                 [4, 1]]
 
+DEFAULT_CAPTION = "Chinese Checkers. If it's a bot's turn, " \
+                  "drag your mouse to view the bot's moves. "
+VIEWING_CAPTION = "Viewing the chosen move. Close the window to quit."
+
 
 class InitGui:
+    """Class to initialize the GUI of the game Chinese Checkers."""
 
     def __init__(self, num_players: int) -> None:
-
-        self._num_players = num_players  # Number of players
-
-        for order in PLAYER_ORDER:
-            if len(order) == num_players:
-                self._player_order = order
-                break
+        """Initialize the GUI of the game Chinese Checkers."""
 
         # Initialize the game
         pygame.init()
@@ -72,7 +72,26 @@ class InitGui:
                                                  pygame.SRCALPHA)
 
         # make the window title
-        pygame.display.set_caption("Chinese Checkers")
+        pygame.display.set_caption(DEFAULT_CAPTION)
+
+        self._font = pygame.font.SysFont("Courier", 18)
+
+        self._start_new_game(num_players)
+
+        # Setting a previous state property to revert the
+        # current state when needed
+        self._previous_state_highlight = None
+        self._previous_state_message = None
+
+    def _start_new_game(self, num_players: int) -> None:
+        """Start the game."""
+
+        self._num_players = num_players  # Number of players
+
+        for order in PLAYER_ORDER:
+            if len(order) == num_players:
+                self._player_order = order
+                break
 
         self._screen.fill(FRAME_COLOR)  # Set the background color
 
@@ -84,13 +103,11 @@ class InitGui:
         # the center of the board.
         self._center_positions: List[Coordinates] = []
 
-        # Setting a previous state property to revert the
-        # current state when needed
-        self._previous_state_highlight = None
-        self._previous_state_message = None
+        # Creating a list to store the screen copies for reviewing the game
+        # after it's finished, and even to start from where it was left.
+        self._screen_copies: List[pygame.Surface] = []
 
         # determine the number of players
-
         self.create_board()  # Create the game board
 
     def create_board(self) -> None:
@@ -127,27 +144,25 @@ class InitGui:
 
         # The distance between the centers of adjacent cells in
         # the center of the board.
-        self._cells_dist = 2 * self._radius_cells + 15  # 15 is the padding between the cells
 
-        # # If the number of players is 2, we need to make a place
-        # # for 15 cells in the same triangle dimensions.
-        # if self._num_players == 2:
-        #     self._radius_cells -= 1.2
-        #     self._radius_peds -= 1.2
+        # 15 is the padding between the cells
+        self._cells_dist = 2 * self._radius_cells + 15
 
         # Calculate the center of the board, to ensure that the hexagram is drawn
         # in its center.
 
         # The reason why we use frame dimensions instead of board dimensions is because
         # the frame dimensions represent the total dimensions of the frame including
-        # any borders or padding, while the board dimensions represent the inner dimensions
+        # any borders or padding, while the board dimensions represent the
+        # inner dimensions
         # of the board excluding any borders or padding.
         center_y = FRAME_HEIGHT / 2
         center_x = FRAME_WIDTH / 2
 
         # Calculating the size of the hexagram based on the board size.
         # The hexagram will be inside the board.
-        # The size of the hexagram is the distance from its center to any of its outer points.
+        # The size of the hexagram is the distance from its center to
+        # any of its outer points.
         hexagram_size = (min(BOARD_WIDTH, BOARD_HEIGHT) * size_ratio) / 2
 
         # Note: We are dividing the size by 2 because without it, it is just the distance
@@ -157,18 +172,28 @@ class InitGui:
         # Calculate the coordinates of the six points of the hexagram
         points = [
             (center_x, center_y - hexagram_size),  # Top
-            (center_x + hexagram_size * cos_30, center_y - hexagram_size * sin_30),  # Top-right
-            (center_x + hexagram_size * cos_30, center_y + hexagram_size * sin_30),  # Bottom-right
+
+            # Top-right
+            (center_x + hexagram_size * cos_30, center_y - hexagram_size * sin_30),
+
+            # Bottom-right
+            (center_x + hexagram_size * cos_30, center_y + hexagram_size * sin_30),
+
             (center_x, center_y + hexagram_size),  # Bottom
-            (center_x - hexagram_size * cos_30, center_y + hexagram_size * sin_30),  # Bottom-left
-            (center_x - hexagram_size * cos_30, center_y - hexagram_size * sin_30)  # Top-left
+
+            # Bottom-left
+            (center_x - hexagram_size * cos_30, center_y + hexagram_size * sin_30),
+
+            # Top-left
+            (center_x - hexagram_size * cos_30, center_y - hexagram_size * sin_30)
         ]
 
         # Defining the indices for creating the triangles.
         # Each tuple represents the points to be used for a triangle.
         indices = [(0, 2, 4), (3, 1, 5)]
 
-        board_color_rgb = funcs.convert_to_rgb(BOARD_COLOR)  # Converting the board color to rgb
+        # Converting the board color to rgb
+        board_color_rgb = funcs.convert_to_rgb(BOARD_COLOR)
         transparency = 255  # 0 is fully transparent, 255 is fully opaque
 
         hexagram_color = (*board_color_rgb[:3], transparency)
@@ -178,13 +203,20 @@ class InitGui:
             triangle_points = [(points[j]) for j in indices[i]]
             pygame.draw.polygon(self._temp_surface, hexagram_color, triangle_points)
 
-        # Doing this seperately so the cells will be drawn on top of the hexagram
+        # Doing this separately so the cells will be drawn on top of the hexagram
         for q in range(len(points)):
 
             rotation_angle = 60
 
-            self._draw_outer_cells(self._temp_surface, points[q], self._radius_cells,
-                                   TRANSPARENT_COLORS[q], rotation_angle * q)
+            if q == 2 or q == 5:  # for adjusting only purposes
+                self._draw_outer_cells(self._temp_surface, points[q], self._radius_cells,
+                                       TRANSPARENT_COLORS[q], rotation_angle * q,
+                                       True)
+
+            else:
+                self._draw_outer_cells(self._temp_surface, points[q], self._radius_cells,
+                                       TRANSPARENT_COLORS[q], rotation_angle * q,
+                                       False)
 
         # Draw the 61 center cells
         self._draw_center_cells(self._temp_surface, self._radius_cells,
@@ -227,16 +259,11 @@ class InitGui:
                           point: Tuple[float, float],
                           radius: float,
                           color: Tuple,
-                          angle: int) -> None:
+                          angle: int,
+                          adjust: bool) -> None:
 
         rows = 4
         cells_dist = self._cells_dist
-
-        # # If the number of players is 2, we need to draw 15 cells to
-        # # each player's side
-        # if self._num_players == 2:
-        #     rows = 5
-        #     cells_dist -= 8
 
         for i in range(rows):
 
@@ -244,14 +271,26 @@ class InitGui:
             cells_in_row = i + 1
 
             # Calculate the y coordinate of the current row
-            y = point[Y_COORD] + i * cells_dist + 4  # 4 is the padding between the rows
+            y = point[Y_COORD] + i * cells_dist - 2  # 4 is the padding between the rows
 
             for j in range(cells_in_row):
 
                 # Calculate the x coordinate of the current cell
-                # (We deduct from the dest to make the triangles more proportional)
+                # all the ifs below is for adjustments only
                 x = (point[X_COORD] - (cells_in_row - 1) *
-                     (cells_dist+4) / 2 + j * (cells_dist+4))
+                     (cells_dist + 5) / 2 + j * (cells_dist + 3))
+
+                if j < cells_in_row // 2:
+                    x = (point[X_COORD] - (cells_in_row - 1) *
+                         (cells_dist + 2) / 2 + j * (cells_dist + 3))
+
+                elif j == cells_in_row // 2 and j % 2 != 0:
+                    x = (point[X_COORD] - (cells_in_row - 1) *
+                         (cells_dist + 4) / 2 + j * (cells_dist + 3))
+
+                elif adjust:
+                    x = (point[X_COORD] - (cells_in_row - 1) *
+                         (cells_dist + 4) / 2 + j * (cells_dist + 3))
 
                 # Rotate the point
                 rotated_x, rotated_y = self._rotate_point((x, y),
@@ -299,11 +338,6 @@ class InitGui:
             y = (center_y - (rows - 1) * self._cells_dist / 2 +
                  i * (self._cells_dist - 3) + 12)
 
-            # # Adjusting the y coordinate to ensure center cells are spaced properly,
-            # # but avoiding adjusting the first last and middle cells in a row
-            # if i != 0 and i != cells_in_row - 1 and i != cells_in_row // 2 + 1:
-            #     y += self.cells_dist / 12
-
             for j in range(cells_in_row):
 
                 # Calculate the x coordinate of the current cell.
@@ -311,6 +345,10 @@ class InitGui:
                 # in the x axis.
                 x = (center_x - (cells_in_row - 1) * self._cells_dist / 2 +
                      j * self._cells_dist)
+
+                # if j < cells_in_row // 2:
+                #     x = (center_x - (cells_in_row - 1) * self._cells_dist / 2 +
+                #          j * self._cells_dist - 4)
 
                 # Appending the coordinates to the list of center positions
                 self._center_positions.append((x, y))
@@ -411,6 +449,9 @@ class InitGui:
         # Update the screen
         pygame.display.flip()
 
+        # Append the current state to the list of previous states
+        self._screen_copies.append(self._screen.copy())
+
     def highlight_locations(self, surface: pygame.Surface,
                             positions: List[List[Coordinates]]) -> None:
         """Highlight the given positions on the screen."""
@@ -430,11 +471,10 @@ class InitGui:
         # Blit the highlight surface on the temp surface
         self._screen.blit(surface, (0, 0))
         pygame.display.flip()  # Update the display
-        print("state: " + str(self._previous_state_highlight))
 
     def unhighlight_surface(self, surface: pygame.Surface) -> None:
         """Unhighlight the possible moves in the given surface."""
-        print("state 2: " + str(self._previous_state_highlight))
+
         # Clear the previous highlights
         surface.fill((0, 0, 0, 0))
 
@@ -454,13 +494,10 @@ class InitGui:
 
         self._previous_state_message = self._screen.copy()
 
-        # Display the message on the screen
-        font = pygame.font.SysFont("Courier", 18)
-
         # Split the message into lines, can be too long
         whole_text = []
         for elem in message.split("\n"):
-            whole_text.append(font.render(elem, True, (0, 0, 0)))
+            whole_text.append(self._font.render(elem, True, (0, 0, 0)))
 
         # get the whole text height and width
 
@@ -484,19 +521,12 @@ class InitGui:
 
             # Update the y_offset, to draw the next line below the current one
             y_offset += line.get_height()
-            print("line_height: " + str(line.get_height()))
 
         # Blit the surface on the screen
         if purpose == PLAYER_TURNS:
 
             self._screen.blit(text_surface, ((FRAME_WIDTH + BOARD_WIDTH) / 2,
                                              FRAME_HEIGHT / 4))
-
-        # elif purpose == ANOTHER_TURN:
-        #
-        #     self._screen.blit(text_surface,
-        #                       (FRAME_WIDTH / 2 - text_surface.get_width() / 2,
-        #                        FRAME_HEIGHT / 2 - text_surface.get_height() / 2))
 
         else:
 
@@ -539,8 +569,6 @@ class InitGui:
         # return true, otherwise false.
         return ped.get_location() in opposite_home_locations
 
-
-
     def color_of_opposite_home(self, location: Coordinates) -> Optional[str]:
         """Return the color of the foreign home if the given location is in it,
         None otherwise."""
@@ -551,92 +579,61 @@ class InitGui:
 
         return None
 
-    def get_color_positions_dict(self):
+    def view_board_at_move(self, move_number: int) -> None:
+        """Display the board state at the specified move number."""
+
+        if move_number <= len(self._screen_copies):
+
+            # Initialize pygame, because it is not initialized yet when we
+            # are viewing the game.
+            pygame.init()
+
+            try:
+                # Clear the screen
+                self._screen.fill((0, 0, 0))
+
+            except pygame.error:
+                print("The display surface has been quit. "
+                      "Recreating the display surface.")
+
+                # Recreate the display surface
+                self._screen = pygame.display.set_mode((FRAME_WIDTH, FRAME_HEIGHT))
+                self._screen.fill((0, 0, 0))
+
+            # Set the window title
+            pygame.display.set_caption(VIEWING_CAPTION)
+
+            # Blit the screen copy onto the main screen
+            self._screen.blit(self._screen_copies[move_number - 1], (0, 0))
+
+            # Update the display
+            pygame.display.flip()
+
+            # Keep the screen open until the user closes it
+            running = True
+            while running:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                        raise SystemExit
+
+        else:
+            print("No screen copy available for the selected move number.")
+
+    def get_color_positions_dict(self) -> Dict[str, List[Coordinates]]:
         return self._color_positions
 
-    def get_center_positions_list(self):
+    def get_center_positions_list(self) -> List[Coordinates]:
         return self._center_positions
 
-    def get_cell_distance(self):
+    def get_cell_distance(self) -> float:
         return self._cells_dist
 
-    def get_temp_surface(self):
+    def get_temp_surface(self) -> pygame.Surface:
         return self._temp_surface
 
-    def get_highlight_surface(self):
+    def get_highlight_surface(self) -> pygame.Surface:
         return self._highlight_surface
 
-    def run(self):
-
-        # Creating a clock object to control the frame rate
-        clock = pygame.time.Clock()
-
-        while True:
-            for event in pygame.event.get():
-
-                # If the user clicks the close button, close the window
-                # and stop the game from running
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-
-            pygame.display.flip()  # Update the display
-
-            clock.tick(60)  # 60 frames per second
-
-
-def test_rotation():
-    center_x = 100
-    center_y = 100
-    point = (150, 100)  # Point to be rotated
-    angle = 90  # Rotation angle in degrees
-
-    # Test rotation
-    rotated_point = InitGui._rotate_point(point, center_x, center_y, angle)
-    print(rotated_point)
-
-
-def test_triangle_placement():
-    center_x = 100
-    center_y = 100
-    hexagram_size = 50
-    cos_30 = math.cos(math.pi / 6)
-    sin_30 = math.sin(math.pi / 6)
-
-    points = [
-        (center_x, center_y - hexagram_size),  # Top
-        (center_x + hexagram_size * cos_30, center_y - hexagram_size * sin_30),
-        # Top-right
-        (center_x - hexagram_size * cos_30, center_y - hexagram_size * sin_30),
-        # Top-left
-        (center_x, center_y + hexagram_size),  # Bottom
-        (center_x + hexagram_size * cos_30, center_y + hexagram_size * sin_30),
-        # Bottom-right
-        (center_x - hexagram_size * cos_30, center_y + hexagram_size * sin_30)
-        # Bottom-left
-    ]
-
-    for i, triangle_points in enumerate([(0, 4, 5), (3, 1, 2)]):
-        print(f"Triangle {i + 1}:")
-
-        # Calculate the center of the current triangle
-        triangle_center_x = sum(
-            points[index][0] for index in triangle_points) / 3
-        triangle_center_y = sum(
-            points[index][1] for index in triangle_points) / 3
-
-        for point_index in triangle_points:
-            # Rotate the current point around the center of the triangle
-            rotated_point = InitGui._rotate_point(points[point_index],
-                                                  triangle_center_x,
-                                                  triangle_center_y,
-                                                  i * -60)
-            print(rotated_point)
-
-
-# if __name__ == "__main__":
-#
-#     game = InitGui()  # Creating the game object
-#     # test_rotation()  # Testing the rotation function
-#     test_triangle_placement()  # Testing the triangle placement
-#     game.run()  # Running the game
+    def get_screen_copies(self) -> List[pygame.Surface]:
+        return self._screen_copies

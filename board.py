@@ -1,4 +1,5 @@
-from typing import Tuple, List, Dict, Union, Set, Optional
+from typing import Tuple, List, Dict, Union, Optional
+
 from ped import Ped
 from pygame_switch import InitGui
 
@@ -30,6 +31,8 @@ class Board:
 
         self._board = board
 
+        self.board_state: List[Dict[Coordinates, Union[Ped, None]]] = []
+
     def place_peds(self, peds: List[Ped]) -> None:
         """Placing the given peds on their initial locations on the board."""
 
@@ -41,11 +44,7 @@ class Board:
             self._board[ped.get_location()] = ped
             self._peds.append(ped)  # add the ped to the list of peds
 
-    # def possible_moves(self, ped: Peds) -> List[Coordinates]:
-    #     """Return a list of possible moves for the given ped."""
-    #
-    #     # get the ped's current location
-    #     ped_location = ped.get_location()
+        self._update_board_state()
 
     def _find_neighbors(self, curr_pos: Coordinates) -> List[Coordinates]:
         """Return a list of the neighbor positions of the given position."""
@@ -70,21 +69,6 @@ class Board:
 
             return min_x <= x <= max_x and min_y <= y <= max_y
 
-        # # Iterate through the positions of the dictionary of the gui object,
-        # # and check if the position is a valid neighbor.
-        # for color, positions in self.gui.get_color_positions_dict().items():
-        #     for pos in positions:
-        #         if pos != curr_pos and is_valid_neighbor(pos):
-        #             neighbors.append(pos)
-        #
-        # # Iterate through the center positions list of the gui object,
-        # # and check if the position is a valid neighbor.
-        # for pos in self.gui.get_center_positions_list():
-        #     if pos != curr_pos and is_valid_neighbor(pos):
-        #         neighbors.append(pos)
-
-        # Iterate through all the positions of the board,
-        # and check if the position is a valid neighbor.
         for pos in self.get_all_positions():
             if pos != curr_pos and is_valid_neighbor(pos):
                 neighbors.append(pos)
@@ -105,7 +89,7 @@ class Board:
         # if the ped is in the foreign home, moving out of it is invalid
         if in_opposite_home:
             opposite_color = self.gui.color_of_opposite_home(curr_location)
-            print("In the home of: ", opposite_color)
+            # print("In the home of: ", opposite_color)
             # Means that the ped is not in any foreign home
             # (although we checked that it is in a foreign home)
             if opposite_color is None:
@@ -114,7 +98,6 @@ class Board:
 
             elif (end_location not in
                     self.gui.get_color_positions_dict()[opposite_color]):
-                print("end_location:" + str(end_location), "dict:" + str(self.gui.get_color_positions_dict()[opposite_color]))
                 return False, False
 
         # if the new location is occupied by another ped,
@@ -125,7 +108,6 @@ class Board:
         # if the new location is in the list of neighbors of the current
         # location, the move is valid
         if end_location in self._find_neighbors(curr_location):
-            # print("end_location:", end_location)
             return True, False
 
         # else, we need to check if we can hop over another ped/s
@@ -142,15 +124,6 @@ class Board:
         the current location to the new one using a single hop.
         Assumes that the new location is one of the locations
         of the dictionary or list from the gui."""
-        changed = False
-        new_location = None
-
-        # If the current location is the same as the end location,
-        # we can hop over one time to it
-        # print("Came to here!")
-        if curr_location == end_location:
-            # print("success!")
-            return True
 
         # Iterate through the neighbors of the current location and
         # check if hopping over is possible
@@ -159,7 +132,7 @@ class Board:
             # if the neighbor is not visited and is occupied by a ped,
             # meaning we can possibly hop over it
             if self._board[neighbor] is not None:
-                # print("neighbor:", neighbor)    # debug
+
                 # Calculate the new location after hopping over the ped
                 new_x = 2 * neighbor[X_COORD] - curr_location[X_COORD]
                 new_y = 2 * neighbor[Y_COORD] - curr_location[Y_COORD]
@@ -170,45 +143,34 @@ class Board:
                 offset_x = 5
                 offset_y = 5
 
-                changed = False
-                # Check if the new location with the offset is in one of the
-                # list of locations, and if it's not occupied by another ped
+                # check for the end location in the center positions list
+                for pos in self.gui.get_center_positions_list():
+
+                    if (new_x - offset_x <= pos[
+                        X_COORD] <= new_x + offset_x and
+                            new_y - offset_y <= pos[
+                                Y_COORD] <= new_y + offset_y and
+                            self._board[pos] is None):
+                        new_location = pos
+
+                        if new_location == end_location:
+                            return True
+
+                # If we didn't find the new location at the center,
+                # we need to check if the new location is within
+                # the outer triangles locations
                 for colors, positions in self.gui.get_color_positions_dict().items():
                     for pos in positions:
                         if (new_x - offset_x <= pos[X_COORD] <= new_x + offset_x and
                                 new_y - offset_y <= pos[Y_COORD] <= new_y + offset_y and
                                 self._board[pos] is None):
                             new_location = pos
-                            changed = True
 
-                if not changed:
-                    for pos in self.gui.get_center_positions_list():
-                        # if pos == (532.2, 172.6):   # debug
-                            # print("pos:", pos, "\nnew_x-offset_x:", new_x - offset_x,
-                            #       "new_x+offset_x:", new_x + offset_x)
-                            # print("new_y-offset_y:", new_y - offset_y,
-                            #       "new_y+offset_y:", new_y + offset_y)
-                        if (new_x - offset_x <= pos[X_COORD] <= new_x + offset_x and
-                                new_y - offset_y <= pos[Y_COORD] <= new_y + offset_y and
-                                self._board[pos] is None):
-                            new_location = pos
-                            changed = True
+                            # if we found the new location, we can break
+                            if new_location == end_location:
+                                return True
 
-                # If we didn't land on any cell, means that
-                # we are out of bounds, search for other neighbors.
-                # Another possibility is that the new location is occupied
-                if not changed:
-                    continue
-
-        # If we couldn't hop over any single ped to the new location,
-        # the move is invalid
-        if not changed or new_location != end_location:
-            return False
-
-        return True  # we can hop over to the given location
-
-        # else:  # we can hop over the ped, check if we can hop over another ped
-        #     return self._can_hop_over(new_location, end_location, count - 1)
+        return False  # we didn't find a way to hop over
 
     def find_valid_moves(self, curr_pos: Coordinates) -> List[List[Coordinates]]:
         """Return a list of valid moves for the given ped."""
@@ -226,6 +188,7 @@ class Board:
 
             # skip the current position
             if position == curr_pos:
+                print("position is the same as curr_pos: " + str(position))
                 continue
 
             # if the move is valid, add it to the list of valid moves
@@ -264,13 +227,14 @@ class Board:
 
         return peds_list
 
-    def get_ped_by_location(self, location: Coordinates) -> Union[Ped, None]:
+    def get_ped_by_location(self, location: Coordinates) -> Optional[Ped]:
         """Return the ped at the given location.
-        If no ped is found, return None."""
+        If no ped is found, raises an error."""
 
-        if location in self._board and self._board[location] is not None:
+        if location in self._board.keys() and self._board[location] is not None:
             return self._board[location]
 
+        print(location in self._board.keys(), self._board[location] is not None)
         raise KeyError("No ped found at this location")
 
     def move_ped(self, ped: Ped, new_location: Coordinates) -> None:
@@ -295,6 +259,8 @@ class Board:
         # update the gui
         self.gui.update_ped(self.gui.get_temp_surface(), old_location, ped)
 
+        self._update_board_state()
+
     def get_peds_locations_by_color(self, color: str) -> List[Coordinates]:
         """Return a list of all the locations of peds with the given color."""
 
@@ -316,3 +282,12 @@ class Board:
 
         return locations
 
+    def get_all_peds(self):
+        """Return all the ped objects on the board."""
+
+        return self._peds
+
+    def _update_board_state(self) -> None:
+        """Update the state of the board based on the move number."""
+
+        self.board_state.append(self._board)
